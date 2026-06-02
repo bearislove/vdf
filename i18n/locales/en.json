@@ -1,0 +1,241 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "processing": "Processing...",
+    "error": "An error occurred",
+    "success": "Success",
+    "retry": "Retry",
+    "close": "Close",
+    "back": "Back",
+    "confirm": "Confirm",
+    "upload": "Upload",
+    "deleteConfirm": "Delete?",
+    "optional": "(optional)",
+    "words": "words",
+    "select": "Select",
+    "deselect": "Deselect",
+    "name": "Name",
+    "view": "View",
+    "dragFiles": "Drop files here",
+    "uploading": "Uploading...",
+    "closeEsc": "Close (ESC)",
+    "scenes": "scenes"
+  },
+  "nav": {
+    "films": "Films",
+    "settings": "Settings",
+    "backTo": "Back to"
+  },
+  "film": {
+    "title": "Your Films",
+    "new": "New Film",
+    "episodes": "episodes",
+    "scenes": "scenes",
+    "merge": "Merge episodes into complete film",
+    "mergeAction": "Merge {count} selected episodes",
+    "noFilms": "No films yet",
+    "createFirst": "Create your first film",
+    "nameLabel": "Film name",
+    "namePlaceholder": "E.g. Journey to the East",
+    "deleteConfirm": "Delete this film?",
+    "mergeComplete": "Merged! Downloading...",
+    "mergeHint": "Select and order episodes to merge into a complete film",
+    "merging": "Merging...",
+    "selectEpisodes": "Select episodes to merge",
+    "episodePrefix": "Episode",
+    "status": {
+      "draft": "Draft",
+      "inProgress": "In Progress",
+      "done": "Done"
+    }
+  },
+  "episode": {
+    "title": "Episodes",
+    "new": "Add Episode",
+    "episode": "Episode",
+    "noEpisodes": "No episodes yet",
+    "addFirst": "Add the first episode",
+    "enrichStory": "Analyze story with AI",
+    "pasteStory": "Paste your story here",
+    "uploadStory": "Upload story file (.md, .txt)",
+    "enriching": "Analyzing with AI...",
+    "enrichSuccess": "Analysis complete",
+    "createNew": "New Episode",
+    "nameLabel": "Episode name",
+    "namePlaceholder": "E.g. Episode 1 — The Beginning",
+    "storyLabel": "Story",
+    "openFile": "Open .md / .txt file",
+    "storyPlaceholder": "Paste your story here\nor drop a .md / .txt file",
+    "durationLabel": "Target duration (seconds)",
+    "durationPlaceholder": "E.g. 120 (2 minutes)",
+    "splitScenesLabel": "Scene splitting",
+    "aiSplit": "Let AI split",
+    "manualSplit": "Set scene count",
+    "sceneCountPlaceholder": "Number of scenes",
+    "aiSplitInfo": "AI will analyze and split scenes when you run Enrich in the episode.",
+    "noContent": "No content yet",
+    "status": {
+      "draft": "Draft",
+      "enriching": "Analyzing",
+      "ready": "Ready",
+      "generating": "Generating",
+      "done": "Done"
+    },
+    "enrichInfo": "AI will translate, expand your story, and auto-create scenes and objects.",
+    "analyze": "Analyze →",
+    "enrichStep1": "Step 1/3 — Translate & expand story",
+    "enrichStep2": "Step 2/3 — Analyze scenes",
+    "enrichStep3": "Step 3/3 — Extract characters & objects",
+    "noVideo": "Episode has no video",
+    "deleteConfirm": "Delete this episode?"
+  },
+  "canvas": {
+    "objects": "Objects — drag into scene",
+    "addObject": "Add Object",
+    "noSelection": "Click a scene to edit it",
+    "dragHint": "Drag objects from the left panel into a scene",
+    "scene": "Scene",
+    "generate": "Generate Video",
+    "addVariant": "Generate New Variant",
+    "variants": "Video Variants",
+    "selectMain": "Set as Main",
+    "selectedScene": "Selected Scene",
+    "sceneNumber": "Scene {n}",
+    "addToScene": "+ Add to scene",
+    "charactersAndObjects": "Characters & Objects",
+    "mode": {
+      "simple": "Simple",
+      "pro": "Pro"
+    }
+  },
+  "object": {
+    "types": {
+      "character": "Character",
+      "prop": "Prop",
+      "environment": "Environment"
+    },
+    "refImages": "Reference Images",
+    "mainImage": "Main Image",
+    "setMain": "Set as Main",
+    "uploadImages": "Drop images here",
+    "generateImage": "Generate image from description",
+    "voiceRef": "Voice Reference",
+    "appearsIn": "Appears in",
+    "noImages": "No images yet",
+    "imageHint": "Include front, side, 3/4 view images",
+    "nameLabel": "Name",
+    "descriptionLabel": "Description (EN)",
+    "descriptionPlaceholder": "Detailed English description for image generation...",
+    "descriptionHint": "Used when generating images",
+    "descriptionRequired": "Description required before generating",
+    "sendingToComfyUI": "Sending to ComfyUI...",
+    "imageGenerated": "Image generated successfully",
+    "generateFailed": "Generation failed",
+    "voiceUploaded": "Voice reference uploaded",
+    "deleteVoiceRef": "Delete voice reference",
+    "uploadVoiceRef": "Upload voice reference · WAV MP3",
+    "mainBadge": "Main",
+    "setAsMain": "Set as Main"
+  },
+  "video": {
+    "main": "Main Video",
+    "queuedMessage": "Added to generation queue"
+  },
+  "params": {
+    "description": "Scene description",
+    "duration": "Duration",
+    "quality": "Quality",
+    "qualityOptions": {
+      "fast": "Fast (draft)",
+      "balanced": "Balanced",
+      "high": "High quality"
+    },
+    "seed": "Seed",
+    "cfgScale": "CFG Scale",
+    "steps": "Steps",
+    "sampler": "Sampler",
+    "scheduler": "Scheduler",
+    "denoise": "Denoise",
+    "guidance": "Flux Guidance",
+    "resolution": "Resolution",
+    "batchSize": "Batch Size",
+    "lora": "LoRA",
+    "controlnet": "ControlNet",
+    "precision": "Precision",
+    "chainFromPrev": "Chain from previous scene",
+    "strategy": "Strategy",
+    "autoDetect": "Auto detect",
+    "videoModelOverride": "Video model (override)",
+    "videoModelPlaceholder": "Leave empty = use default"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "comfyui": "ComfyUI",
+      "models": "Models",
+      "ai": "AI Provider",
+      "storage": "Storage",
+      "about": "About"
+    },
+    "comfyui": {
+      "url": "Server URL",
+      "timeout": "Timeout (seconds)",
+      "test": "Test",
+      "connected": "Connected",
+      "disconnected": "Disconnected"
+    },
+    "models": {
+      "imageModel": "Image model",
+      "videoModel": "Video model",
+      "vae": "VAE",
+      "distilledLora": "Distilled LoRA",
+      "reload": "Reload from ComfyUI",
+      "selectModel": "-- Select model --",
+      "selectLora": "-- Select LoRA --",
+      "loadError": "Failed to load model list. Check if ComfyUI is running."
+    },
+    "ai": {
+      "provider": "Provider",
+      "apiUrl": "API URL",
+      "apiKey": "API Key",
+      "model": "Model",
+      "apiKeyWarning": "API key is read from .env — not saved through this UI.",
+      "modelPlaceholder": "gpt-4o, gemini-pro, llama3...",
+      "providers": {
+        "openai": "OpenAI / OpenAI-compatible",
+        "ollama": "Ollama"
+      }
+    },
+    "storage": {
+      "path": "Storage path",
+      "directoryStructure": "Directory structure",
+      "fileServeInfo": "Files are served via /api/files/[...path] — paths are not exposed directly."
+    },
+    "about": {
+      "version": "StoryForge v1.0.0",
+      "description": "AI Video Production App.",
+      "techStack": "Create films from text stories with ComfyUI + LTX Video / Wan2.2 / SVD."
+    }
+  },
+  "generation": {
+    "strategy": {
+      "t2v": "Text-to-Video",
+      "i2v_single": "Image-to-Video (1 character)",
+      "i2v_composite": "FLUX2 composite + I2V (2+ characters)",
+      "ic_lora": "IC-LoRA"
+    },
+    "warnings": {
+      "twoCharacters": "2 characters → FLUX2 composite + LTX I2V",
+      "threeCharacters": "3+ characters reduces quality — consider Wan2.2",
+      "closeUp": "Close-up shots work better with Wan2.2",
+      "longScene": "Scenes longer than 4s may flicker",
+      "noImage": "Add images to improve consistency",
+      "comfyOffline": "ComfyUI is not connected"
+    }
+  }
+}

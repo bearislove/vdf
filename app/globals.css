@@ -2,26 +2,298 @@
 @tailwind components;
 @tailwind utilities;
 
+/* === DARK THEME (default) === */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg0: #0F0F0F;
+  --bg1: #1A1A1A;
+  --bg2: #242424;
+  --bg3: #2E2E2E;
+  --border: #333333;
+  --border2: #444444;
+  --text1: #F0EEEA;
+  --text2: #A09E98;
+  --text3: #666460;
+  --accent: #FF9C2A;
+  --accent-dim: #2A1E0A;
+  --green: #2ECC71;
+  --green-dim: #0D2B1A;
+  --red: #E24B4A;
+  --red-dim: #2B0F0F;
+  --blue: #5B9CF6;
+  --blue-dim: #0F1F3A;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* === LIGHT THEME === */
+[data-theme="light"] {
+  --bg0: #F5F4F0;
+  --bg1: #FFFFFF;
+  --bg2: #F0EEE8;
+  --bg3: #E8E6E0;
+  --border: #DEDBD4;
+  --border2: #C8C5BC;
+  --text1: #1A1916;
+  --text2: #6B6860;
+  --text3: #A09E98;
+  --accent: #FF9C2A;
+  --accent-dim: #FFF3E0;
+  --green: #2ECC71;
+  --green-dim: #E8F8EF;
+  --red: #E24B4A;
+  --red-dim: #FDE8E8;
+  --blue: #5B9CF6;
+  --blue-dim: #EBF1FE;
+}
+
+/* === BASE STYLES === */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg0);
+  color: var(--text1);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* === TYPOGRAPHY === */
+.text-xs  { font-size: 11px; line-height: 1.4; }
+.text-sm  { font-size: 12px; line-height: 1.5; }
+.text-base{ font-size: 14px; line-height: 1.6; }
+.text-md  { font-size: 15px; line-height: 1.5; }
+.text-lg  { font-size: 17px; line-height: 1.4; }
+.text-xl  { font-size: 22px; line-height: 1.3; }
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* === BUTTONS === */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  border: 0.5px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text1);
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+  line-height: 1;
+  text-decoration: none;
 }
+.btn:hover { background: var(--bg3); }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-p {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 0.5px solid var(--accent);
+  background: var(--accent);
+  color: #000;
+  cursor: pointer;
+  transition: background 150ms;
+  line-height: 1;
+  text-decoration: none;
+}
+.btn-p:hover { background: #e8891f; }
+.btn-p:active { transform: scale(0.98); }
+.btn-p:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 0.5px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+  font-size: 14px;
+}
+.icon-btn:hover { background: var(--bg3); color: var(--text1); }
+
+.btn-danger {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.rp-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 0.5px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text1);
+  cursor: pointer;
+  margin-bottom: 6px;
+  transition: background 150ms;
+}
+.rp-btn:hover { background: var(--bg3); }
+.rp-btn.p {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 500;
+}
+.rp-btn.p:hover { background: #e8891f; }
+
+/* === FORMS === */
+input, textarea, select {
+  font-size: 12px;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: var(--bg2);
+  color: var(--text1);
+  outline: none;
+  transition: border-color 150ms;
+  font-family: inherit;
+  width: 100%;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--text3);
+}
+
+/* === STATUS PILLS === */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+.pill-draft   { background: var(--bg3); color: var(--text2); }
+.pill-active  { background: var(--accent-dim); color: var(--accent); }
+.pill-done    { background: var(--green-dim); color: var(--green); }
+.pill-error   { background: var(--red-dim); color: var(--red); }
+.pill-info    { background: var(--blue-dim); color: var(--blue); }
+
+/* === DIVIDER === */
+.divider { border-top: 0.5px solid var(--border); margin: 12px 0; }
+
+/* === WARNING BOX === */
+.warning-box {
+  background: var(--accent-dim);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--accent);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+/* === SECTION TITLE === */
+.section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  padding: 11px 12px 8px;
+  border-bottom: 0.5px solid var(--border);
+}
+
+/* === FORM LABEL === */
+.form-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  letter-spacing: 0.03em;
+  margin-bottom: 5px;
+}
+
+/* === CARD === */
+.card {
+  background: var(--bg1);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 150ms;
+}
+.card:hover { border-color: var(--border2); }
+
+/* === REACT FLOW OVERRIDES === */
+/* === ANIMATIONS === */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-border { 0%,100% { border-color: var(--accent); } 50% { border-color: var(--accent-dim); } }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* EpisodeCard enriching */
+@keyframes ep-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes ep-spin { to { transform: rotate(360deg); } }
+@keyframes ep-dot {
+  0%, 60%, 100% { opacity: 0.2; }
+  30%           { opacity: 1; }
+}
+@keyframes ep-step-cycle {
+  0%, 30%  { color: var(--blue); }
+  33%, 100% { color: var(--text3); }
+}
+
+.ep-shimmer-bar {
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, var(--blue) 40%, var(--accent) 60%, transparent 100%);
+  background-size: 200% 100%;
+  animation: ep-shimmer 1.4s linear infinite;
+}
+.ep-spin {
+  display: inline-block;
+  animation: ep-spin 1s linear infinite;
+}
+.ep-dots span {
+  animation: ep-dot 1.2s ease-in-out infinite;
+}
+/* Step rows cycle highlight: step 0 active for 4s, then step 1 for 4s, then step 2 */
+.ep-step-0 { animation: ep-step-cycle 12s 0s linear infinite; }
+.ep-step-1 { animation: ep-step-cycle 12s 4s linear infinite; }
+.ep-step-2 { animation: ep-step-cycle 12s 8s linear infinite; }
+
+/* === REACT FLOW OVERRIDES === */
+.react-flow__background { background: var(--bg0) !important; }
+.react-flow__controls { background: var(--bg1) !important; border: 0.5px solid var(--border) !important; }
+.react-flow__controls button { background: var(--bg1) !important; border-bottom: 0.5px solid var(--border) !important; color: var(--text2) !important; }
+.react-flow__controls button:hover { background: var(--bg2) !important; }
+.react-flow__minimap { background: var(--bg1) !important; border: 0.5px solid var(--border) !important; }

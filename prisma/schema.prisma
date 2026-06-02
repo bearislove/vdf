@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// AD-4: Enums
+enum EpisodeStatus {
+  DRAFT
+  ENRICHING
+  READY
+  GENERATING
+  DONE
+}
+
+enum ObjectType {
+  CHARACTER
+  PROP
+  ENVIRONMENT
+}
+
+enum ShotType {
+  WIDE
+  MEDIUM
+  CLOSE
+  AERIAL
+  POV
+}
+
+enum VideoStatus {
+  QUEUED
+  GENERATING_IMAGE
+  GENERATING_VIDEO
+  DONE
+  FAILED
+}
+
+enum JobType {
+  FLUX2_REF_IMAGE
+  FLUX2_COMPOSITE
+  LTX_VIDEO
+  WAN_VIDEO
+  EXTRACT_LAST_FRAME
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+  CANCELLED
+}
+
+enum GenerationStrategy {
+  T2V
+  I2V_SINGLE
+  I2V_COMPOSITE
+  IC_LORA
+}
+
+model Film {
+  id           String        @id @default(cuid())
+  title        String
+  description  String        @default("")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  episodes     Episode[]
+  storyObjects StoryObject[]
+
+  @@map("films")
+}
+
+model Episode {
+  id                    String        @id @default(cuid())
+  filmId                String        @map("film_id")
+  order                 Int           @default(0)
+  title                 String
+  storyRaw              String        @default("") @map("story_raw")
+  storyEnriched         String        @default("") @map("story_enriched")
+  canvasState           Json          @default("{}") @map("canvas_state")
+  imageModel            String        @default("") @map("image_model")
+  videoModel            String        @default("") @map("video_model")
+  status                EpisodeStatus @default(DRAFT)
+  targetDurationSeconds Float?        @map("target_duration_seconds")
+  sceneCountHint        Int?          @map("scene_count_hint")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  film                  Film          @relation(fields: [filmId], references: [id], onDelete: Cascade)
+  scenes                Scene[]
+
+  @@unique([filmId, order])
+  @@map("episodes")
+}
+
+model StoryObject {
+  id             String            @id @default(cuid())
+  filmId         String            @map("film_id")
+  type           ObjectType
+  name           String
+  descriptionEn  String            @default("") @map("description_en")
+  refImages      Json              @default("[]") @map("ref_images")
+  audioRefPath   String?           @map("audio_ref_path")
+  loraPath       String?           @map("lora_path")
+  flux2Params    Json              @default("{}") @map("flux2_params")
+  canvasX        Float             @default(0) @map("canvas_x")
+  canvasY        Float             @default(0) @map("canvas_y")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  film           Film              @relation(fields: [filmId], references: [id], onDelete: Cascade)
+  sceneLinks     SceneObjectLink[]
+  generationJobs GenerationJob[]
+
+  @@map("story_objects")
+}
+
+model Scene {
+  id                   String              @id @default(cuid())
+  episodeId            String              @map("episode_id")
+  order                Int                 @default(0)
+  title                String              @default("")
+  promptEn             String              @default("") @map("prompt_en")
+  promptEnOverride     String?             @map("prompt_en_override")
+  cameraDirection      String              @default("") @map("camera_direction")
+  shotType             ShotType            @default(MEDIUM) @map("shot_type")
+  mood                 String              @default("")
+  lightingNote         String              @default("") @map("lighting_note")
+  transitionsTo        Json                @default("[]") @map("transitions_to")
+  compositeImagePath   String?             @map("composite_image_path")
+  selectedVideoId      String?             @map("selected_video_id")
+  selectedVideo        VideoVariant?       @relation("SelectedVideo", fields: [selectedVideoId], references: [id], onDelete: SetNull)
+  videoModel           String              @default("") @map("video_model")
+  videoParams          Json                @default("{}") @map("video_params")
+  useLastFrameChaining Boolean             @default(true) @map("use_last_frame_chaining")
+  strategyOverride     GenerationStrategy? @map("strategy_override")
+  canvasX              Float               @default(0) @map("canvas_x")
+  canvasY              Float               @default(0) @map("canvas_y")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  episode              Episode             @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  objectLinks          SceneObjectLink[]
+  videoVariants        VideoVariant[]      @relation("SceneVariants")
+  generationJobs       GenerationJob[]
+
+  @@unique([episodeId, order])
+  @@map("scenes")
+}
+
+model SceneObjectLink {
+  id           String      @id @default(cuid())
+  sceneId      String      @map("scene_id")
+  objectId     String      @map("object_id")
+  role         String      @default("present")
+  strengthHint Float       @default(1.0) @map("strength_hint")
+  scene        Scene       @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  object       StoryObject @relation(fields: [objectId], references: [id], onDelete: Cascade)
+
+  @@unique([sceneId, objectId])
+  @@map("scene_object_links")
+}
+
+model VideoVariant {
+  id                 String          @id @default(cuid())
+  sceneId            String          @map("scene_id")
+  paramsSnapshot     Json            @map("params_snapshot")
+  workflowSnapshot   Json            @default("{}") @map("workflow_snapshot")
+  comfyPromptId      String?         @map("comfy_prompt_id")
+  comfyClientId      String?         @map("comfy_client_id")
+  status             VideoStatus     @default(QUEUED)
+  statusMessage      String          @default("") @map("status_message")
+  errorDetail        String?         @map("error_detail")
+  currentNode        String?         @map("current_node")
+  progressStep       Int             @default(0) @map("progress_step")
+  progressTotal      Int             @default(0) @map("progress_total")
+  compositeImagePath String?         @map("composite_image_path")
+  videoPath          String?         @map("video_path")
+  lastFramePath      String?         @map("last_frame_path")
+  thumbnailPath      String?         @map("thumbnail_path")
+  durationSeconds    Float?          @map("duration_seconds")
+  modelUsed          String          @default("") @map("model_used")
+  strategy           String          @default("")
+  canvasX            Float           @default(160) @map("canvas_x")
+  canvasY            Float           @default(25) @map("canvas_y")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  completedAt        DateTime?       @map("completed_at")
+  scene              Scene           @relation("SceneVariants", fields: [sceneId], references: [id], onDelete: Cascade)
+  selectedByScenes   Scene[]         @relation("SelectedVideo")
+  generationJobs     GenerationJob[]
+
+  @@map("video_variants")
+}
+
+model GenerationJob {
+  id             String        @id @default(cuid())
+  sceneId        String?       @map("scene_id")
+  objectId       String?       @map("object_id")
+  variantId      String?       @map("variant_id")
+  jobType        JobType       @map("job_type")
+  comfyPromptId  String?       @map("comfy_prompt_id")
+  comfyClientId  String?       @map("comfy_client_id")
+  comfyServerUrl String        @map("comfy_server_url")
+  status         JobStatus     @default(QUEUED)
+  currentNode    String?       @map("current_node")
+  progressStep   Int           @default(0) @map("progress_step")
+  progressTotal  Int           @default(0) @map("progress_total")
+  statusMessage  String        @default("") @map("status_message")
+  errorDetail    String?       @map("error_detail")
+  inputSnapshot  Json          @default("{}") @map("input_snapshot")
+  outputPath     String?       @map("output_path")
+  queuedAt       DateTime      @default(now()) @map("queued_at")
+  startedAt      DateTime?     @map("started_at")
+  completedAt    DateTime?     @map("completed_at")
+  scene          Scene?        @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  object         StoryObject?  @relation(fields: [objectId], references: [id], onDelete: SetNull)
+  variant        VideoVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@map("generation_jobs")
+}
+
+model AppConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_config")
+}

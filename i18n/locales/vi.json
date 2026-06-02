@@ -1,0 +1,241 @@
+{
+  "common": {
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "delete": "Xóa",
+    "create": "Tạo",
+    "edit": "Chỉnh sửa",
+    "loading": "Đang tải...",
+    "processing": "Đang xử lý...",
+    "error": "Đã xảy ra lỗi",
+    "success": "Thành công",
+    "retry": "Thử lại",
+    "close": "Đóng",
+    "back": "Quay lại",
+    "confirm": "Xác nhận",
+    "upload": "Tải lên",
+    "deleteConfirm": "Xóa?",
+    "optional": "(tùy chọn)",
+    "words": "từ",
+    "select": "Chọn",
+    "deselect": "Bỏ chọn",
+    "name": "Tên",
+    "view": "Xem",
+    "dragFiles": "Kéo file vào đây",
+    "uploading": "Đang upload...",
+    "closeEsc": "Đóng (ESC)",
+    "scenes": "cảnh"
+  },
+  "nav": {
+    "films": "Bộ phim",
+    "settings": "Cài đặt",
+    "backTo": "Quay lại"
+  },
+  "film": {
+    "title": "Bộ phim của bạn",
+    "new": "Bộ phim mới",
+    "episodes": "tập",
+    "scenes": "cảnh",
+    "merge": "Ghép tập thành phim hoàn chỉnh",
+    "mergeAction": "Ghép {count} tập đã chọn",
+    "noFilms": "Chưa có bộ phim nào",
+    "createFirst": "Tạo bộ phim đầu tiên của bạn",
+    "nameLabel": "Tên bộ phim",
+    "namePlaceholder": "VD: Hành trình phía Đông",
+    "deleteConfirm": "Xóa bộ phim này?",
+    "mergeComplete": "Ghép xong! Đang tải về...",
+    "mergeHint": "Chọn và sắp xếp thứ tự các tập để ghép thành phim hoàn chỉnh",
+    "merging": "Đang ghép...",
+    "selectEpisodes": "Chọn tập để ghép",
+    "episodePrefix": "Tập",
+    "status": {
+      "draft": "Bản nháp",
+      "inProgress": "Đang thực hiện",
+      "done": "Hoàn thành"
+    }
+  },
+  "episode": {
+    "title": "Các tập phim",
+    "new": "Thêm tập",
+    "episode": "Tập",
+    "noEpisodes": "Chưa có tập nào",
+    "addFirst": "Thêm tập đầu tiên",
+    "enrichStory": "Phân tích cốt chuyện với AI",
+    "pasteStory": "Dán cốt chuyện vào đây",
+    "uploadStory": "Tải file cốt chuyện (.md, .txt)",
+    "enriching": "Đang phân tích với AI...",
+    "enrichSuccess": "Phân tích thành công",
+    "createNew": "Tạo tập mới",
+    "nameLabel": "Tên tập",
+    "namePlaceholder": "VD: Tập 1 — Khởi đầu",
+    "storyLabel": "Cốt chuyện",
+    "openFile": "Mở file .md / .txt",
+    "storyPlaceholder": "Dán cốt chuyện vào đây\nhoặc kéo thả file .md / .txt",
+    "durationLabel": "Thời lượng mục tiêu (giây)",
+    "durationPlaceholder": "VD: 120 (2 phút)",
+    "splitScenesLabel": "Chia cảnh",
+    "aiSplit": "Nhờ AI chia",
+    "manualSplit": "Tự chọn số cảnh",
+    "sceneCountPlaceholder": "Số cảnh muốn chia",
+    "aiSplitInfo": "AI sẽ tự phân tích và chia cảnh khi bạn chạy Enrich trong tập.",
+    "noContent": "Chưa có nội dung",
+    "status": {
+      "draft": "Nháp",
+      "enriching": "Đang phân tích",
+      "ready": "Sẵn sàng",
+      "generating": "Đang generate",
+      "done": "Hoàn thành"
+    },
+    "enrichInfo": "AI sẽ dịch, mở rộng cốt chuyện và tạo scenes + objects tự động.",
+    "analyze": "Phân tích →",
+    "enrichStep1": "Bước 1/3 — Dịch & mở rộng cốt chuyện",
+    "enrichStep2": "Bước 2/3 — Phân tích cảnh quay",
+    "enrichStep3": "Bước 3/3 — Trích xuất nhân vật & vật thể",
+    "noVideo": "Tập chưa có video",
+    "deleteConfirm": "Xóa tập này?"
+  },
+  "canvas": {
+    "objects": "Đối tượng — kéo vào scene",
+    "addObject": "Thêm đối tượng",
+    "noSelection": "Click vào scene để chỉnh sửa cảnh",
+    "dragHint": "Kéo đối tượng từ panel trái vào scene",
+    "scene": "Cảnh",
+    "generate": "Tạo video",
+    "addVariant": "Tạo thêm bản mới",
+    "variants": "Các bản video",
+    "selectMain": "Chọn làm chính",
+    "selectedScene": "Cảnh đang chọn",
+    "sceneNumber": "Cảnh {n}",
+    "addToScene": "+ Thêm vào cảnh này",
+    "charactersAndObjects": "Nhân vật & Đối tượng",
+    "mode": {
+      "simple": "Simple",
+      "pro": "Pro"
+    }
+  },
+  "object": {
+    "types": {
+      "character": "Nhân vật",
+      "prop": "Prop",
+      "environment": "Môi trường"
+    },
+    "refImages": "Ảnh tham chiếu",
+    "mainImage": "Ảnh chính",
+    "setMain": "Đặt làm chính",
+    "uploadImages": "Kéo ảnh vào đây",
+    "generateImage": "Generate ảnh từ mô tả",
+    "voiceRef": "Giọng tham chiếu",
+    "appearsIn": "Xuất hiện trong",
+    "noImages": "Chưa có ảnh nào",
+    "imageHint": "Nên có ảnh mặt trước, bên cạnh, 3/4",
+    "nameLabel": "Tên",
+    "descriptionLabel": "Mô tả (EN)",
+    "descriptionPlaceholder": "Detailed English description for image generation...",
+    "descriptionHint": "Dùng mô tả này khi generate ảnh",
+    "descriptionRequired": "Cần nhập mô tả trước khi generate",
+    "sendingToComfyUI": "Đang gửi tới ComfyUI...",
+    "imageGenerated": "Đã generate ảnh thành công",
+    "generateFailed": "Generate thất bại",
+    "voiceUploaded": "Đã upload giọng tham chiếu",
+    "deleteVoiceRef": "Xóa giọng tham chiếu",
+    "uploadVoiceRef": "Upload giọng tham chiếu · WAV MP3",
+    "mainBadge": "Chính",
+    "setAsMain": "Đặt chính"
+  },
+  "video": {
+    "main": "Video chính",
+    "queuedMessage": "Đã thêm vào hàng đợi generate"
+  },
+  "params": {
+    "description": "Mô tả cảnh",
+    "duration": "Thời lượng",
+    "quality": "Chất lượng",
+    "qualityOptions": {
+      "fast": "Nhanh (draft)",
+      "balanced": "Cân bằng",
+      "high": "Chất lượng cao"
+    },
+    "seed": "Seed",
+    "cfgScale": "CFG scale",
+    "steps": "Steps",
+    "sampler": "Sampler",
+    "scheduler": "Scheduler",
+    "denoise": "Denoise",
+    "guidance": "Flux guidance",
+    "resolution": "Resolution",
+    "batchSize": "Batch size",
+    "lora": "LoRA",
+    "controlnet": "ControlNet",
+    "precision": "Precision",
+    "chainFromPrev": "Giữ liên tục từ cảnh trước",
+    "strategy": "Strategy",
+    "autoDetect": "Auto detect",
+    "videoModelOverride": "Video model (override)",
+    "videoModelPlaceholder": "Để trống = dùng default"
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "sections": {
+      "comfyui": "ComfyUI",
+      "models": "Models",
+      "ai": "AI Provider",
+      "storage": "Storage",
+      "about": "Về app"
+    },
+    "comfyui": {
+      "url": "Server URL",
+      "timeout": "Timeout (giây)",
+      "test": "Kiểm tra",
+      "connected": "Đang chạy",
+      "disconnected": "Không kết nối được"
+    },
+    "models": {
+      "imageModel": "Image model",
+      "videoModel": "Video model",
+      "vae": "VAE",
+      "distilledLora": "Distilled LoRA",
+      "reload": "Reload từ ComfyUI",
+      "selectModel": "-- Chọn model --",
+      "selectLora": "-- Chọn LoRA --",
+      "loadError": "Không tải được model list. Kiểm tra ComfyUI đang chạy."
+    },
+    "ai": {
+      "provider": "Provider",
+      "apiUrl": "API URL",
+      "apiKey": "API Key",
+      "model": "Model",
+      "apiKeyWarning": "API key đọc từ file .env — không lưu qua UI này.",
+      "modelPlaceholder": "gpt-4o, gemini-pro, llama3...",
+      "providers": {
+        "openai": "OpenAI / OpenAI-compatible",
+        "ollama": "Ollama"
+      }
+    },
+    "storage": {
+      "path": "Storage path",
+      "directoryStructure": "Cấu trúc thư mục",
+      "fileServeInfo": "Files được serve qua /api/files/[...path] — không expose path trực tiếp."
+    },
+    "about": {
+      "version": "StoryForge v1.0.0",
+      "description": "AI Video Production App.",
+      "techStack": "Tạo phim từ cốt chuyện văn bản với ComfyUI + LTX Video / Wan2.2 / SVD."
+    }
+  },
+  "generation": {
+    "strategy": {
+      "t2v": "Text-to-Video",
+      "i2v_single": "Image-to-Video (1 nhân vật)",
+      "i2v_composite": "FLUX2 composite + I2V (2+ nhân vật)",
+      "ic_lora": "IC-LoRA"
+    },
+    "warnings": {
+      "twoCharacters": "2 nhân vật → FLUX2 composite + LTX I2V",
+      "threeCharacters": "3+ nhân vật → khuyên dùng Wan2.2",
+      "closeUp": "Close-up cảm xúc → kết quả tốt hơn với Wan2.2",
+      "longScene": "Cảnh dài hơn 4s → có thể bị flickering",
+      "noImage": "Thêm ảnh để tăng độ nhất quán",
+      "comfyOffline": "ComfyUI không kết nối được"
+    }
+  }
+}
