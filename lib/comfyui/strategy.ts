@@ -10,11 +10,8 @@ export function chooseStrategy(
 
   const characters = objects.filter((o) => o.type === "CHARACTER");
 
+  // Always use the configured model — don't auto-switch models based on character count.
+  // I2V_COMPOSITE / IC_LORA only when user explicitly sets strategyOverride.
   if (characters.length === 0) return "T2V";
-
-  if (characters.length === 1) {
-    return characters[0].loraPath ? "IC_LORA" : "I2V_SINGLE";
-  }
-
-  return "I2V_COMPOSITE";
+  return "I2V_SINGLE";
 }

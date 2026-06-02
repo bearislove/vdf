@@ -63,6 +63,8 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
   const displayVariant = selectedVariant ?? latestVariant;
 
   const isDone = displayVariant?.status === "DONE";
+  const coverImg = displayVariant?.lastFramePath || displayVariant?.thumbnailPath ||
+    (displayVariant?.videoPath?.endsWith(".webp") ? displayVariant.videoPath : null);
   const isGenerating =
     displayVariant?.status === "GENERATING_IMAGE" ||
     displayVariant?.status === "GENERATING_VIDEO";
@@ -110,13 +112,6 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
       {/* Handles */}
       <Handle type="target" position={Position.Left} style={{ background: "var(--border2)" }} />
       <Handle type="source" position={Position.Right} style={{ background: "var(--border2)" }} />
-      {/* Handle nối lên VideoNode phía trên */}
-      <Handle
-        type="source"
-        id="to-video"
-        position={Position.Top}
-        style={{ background: "transparent", border: "none", width: 1, height: 1 }}
-      />
 
       {/* Head */}
       <div
@@ -166,9 +161,9 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
         )}
 
         {isDone ? (
-          (displayVariant?.lastFramePath || displayVariant?.thumbnailPath) ? (
+          coverImg ? (
             <img
-              src={`/api/files/${displayVariant.lastFramePath ?? displayVariant.thumbnailPath}`}
+              src={`/api/files/${coverImg}`}
               alt=""
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />

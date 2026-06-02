@@ -1,33 +1,34 @@
-// Wan2.2 Image-to-Video workflow
-// Better than LTX for: 3+ characters, close-up emotion shots
-// Uses WanImageToVideo node (available in ComfyUI-WanVideoWrapper)
+import type { WanSamplerDefaults } from "../defaults";
 
 export const WORKFLOW_VERSION = "1.0.0";
 export const REQUIRED_NODES = [
   "CheckpointLoaderSimple",
   "WanImageToVideo",
   "KSampler",
-  "VAEDecode",
+  "VAEDecodeTiled",
   "CLIPTextEncode",
 ];
 
 export interface WanVideoParams {
   positivePrompt: string;
   negativePrompt?: string;
-  model: string;         // e.g. "wan2.2-i2v.safetensors"
+  model: string;
   width: number;
   height: number;
-  numFrames: number;     // 1–81, typically 25 (~1s@25fps)
+  numFrames: number;
+  fps: number;
   seed: number;
   steps: number;
   cfg: number;
-  initImageFilename?: string;   // ComfyUI uploaded image filename
-  lastFrameFilename?: string;   // Optional last frame for chaining
+  initImageFilename?: string;
+  lastFrameFilename?: string;
   filenamePrefix?: string;
+  samplerDefaults?: WanSamplerDefaults;
 }
 
 export function buildWanVideoWorkflow(params: WanVideoParams): Record<string, unknown> {
   const seed = params.seed === -1 ? Math.floor(Math.random() * 2 ** 32) : params.seed;
+  const sampler = params.samplerDefaults ?? { name: "euler_ancestral", scheduler: "karras" };
 
   const workflow: Record<string, unknown> = {
     "1": {
@@ -40,71 +41,58 @@ export function buildWanVideoWorkflow(params: WanVideoParams): Record<string, un
     },
     "3": {
       class_type: "CLIPTextEncode",
+      inputs: { text: params.negativePrompt ?? "bad quality, deformed, ugly", clip: ["1", 1] },
+    },
+    "4": {
+      class_type: "WanImageToVideo",
       inputs: {
-        text: params.negativePrompt ?? "bad quality, deformed, ugly",
-        clip: ["1", 1],
+        positive: ["2", 0],
+        negative: ["3", 0],
+        vae: ["1", 2],
+        width: params.width,
+        height: params.height,
+        length: params.numFrames,
+        batch_size: 1,
       },
     },
   };
 
-  // WanImageToVideo conditioning
-  // WanImageToVideo: (positive, negative, vae, width, height, length, batch_size)
-  // → (positive, negative, latent)
-  workflow["4"] = {
-    class_type: "WanImageToVideo",
-    inputs: {
-      positive: ["2", 0],
-      negative: ["3", 0],
-      vae: ["1", 2],
-      width: params.width,
-      height: params.height,
-      length: params.numFrames,
-      batch_size: 1,
-    },
-  };
+  // Image conditioning: prefer initImage as start, lastFrame as end.
+  // If only lastFrame (no character ref) → use it as start for seamless continuation.
+  const hasInit = !!params.initImageFilename;
+  const hasLast = !!params.lastFrameFilename;
 
-  // If we have an init image, load it and apply as image guide
-  if (params.initImageFilename) {
+  if (hasInit || hasLast) {
+    const startImage = params.initImageFilename ?? params.lastFrameFilename!;
     workflow["5"] = {
       class_type: "LoadImage",
-      inputs: { image: params.initImageFilename, upload: "image" },
+      inputs: { image: startImage, upload: "image" },
     };
-    // WanFirstLastFrameToVideo for image conditioning
-    workflow["6"] = {
-      class_type: "WanFirstLastFrameToVideo",
-      inputs: {
-        positive: ["4", 0],
-        negative: ["4", 1],
-        vae: ["1", 2],
-        latent: ["4", 2],
-        start_image: ["5", 0],
-        ...(params.lastFrameFilename
-          ? {}
-          : {}),
-      },
+
+    const firstLastInputs: Record<string, unknown> = {
+      positive: ["4", 0],
+      negative: ["4", 1],
+      vae: ["1", 2],
+      latent: ["4", 2],
+      start_image: ["5", 0],
     };
-    // Add last frame if chaining
-    if (params.lastFrameFilename) {
+
+    // end_image: previous scene's last frame (only when we also have an init image)
+    if (hasInit && hasLast) {
       workflow["7"] = {
         class_type: "LoadImage",
-        inputs: { image: params.lastFrameFilename, upload: "image" },
+        inputs: { image: params.lastFrameFilename!, upload: "image" },
       };
-      // Override with both frames
-      workflow["6"] = {
-        class_type: "WanFirstLastFrameToVideo",
-        inputs: {
-          positive: ["4", 0],
-          negative: ["4", 1],
-          vae: ["1", 2],
-          latent: ["4", 2],
-          start_image: ["5", 0],
-          end_image: ["7", 0],
-        },
-      };
+      firstLastInputs.end_image = ["7", 0];
     }
+
+    workflow["6"] = {
+      class_type: "WanFirstLastFrameToVideo",
+      inputs: firstLastInputs,
+    };
   }
 
-  const condNode = params.initImageFilename ? "6" : "4";
+  const condNode = (hasInit || hasLast) ? "6" : "4";
 
   workflow["8"] = {
     class_type: "KSampler",
@@ -116,21 +104,28 @@ export function buildWanVideoWorkflow(params: WanVideoParams): Record<string, un
       seed,
       steps: params.steps,
       cfg: params.cfg,
-      sampler_name: "euler_ancestral",
-      scheduler: "karras",
+      sampler_name: sampler.name,
+      scheduler: sampler.scheduler,
       denoise: 1.0,
     },
   };
   workflow["9"] = {
     class_type: "VAEDecodeTiled",
-    inputs: { samples: ["8", 0], vae: ["1", 2], tile_size: 512, overlap: 64, temporal_size: 64, temporal_overlap: 8 },
+    inputs: {
+      samples: ["8", 0],
+      vae: ["1", 2],
+      tile_size: 512,
+      overlap: 64,
+      temporal_size: 64,
+      temporal_overlap: 8,
+    },
   };
   workflow["10"] = {
     class_type: "SaveAnimatedWEBP",
     inputs: {
       images: ["9", 0],
       filename_prefix: params.filenamePrefix ?? "wan_video",
-      fps: 16,
+      fps: params.fps,
       lossless: false,
       quality: 85,
       method: "default",

@@ -8,6 +8,7 @@ import { apiPut, apiPost } from "@/lib/utils/api";
 import { ParamsSimple, durationToFrames, type SimpleParams } from "./ParamsSimple";
 import { ParamsPro } from "./ParamsPro";
 import { VariantList } from "./VariantList";
+import { QUALITY_STEPS, LTX_VIDEO_DEFAULTS } from "@/lib/comfyui/defaults";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
@@ -24,13 +25,6 @@ interface Props {
   onUpdate: () => void;
 }
 
-const QUALITY_PRESETS: Record<string, { steps: number; guidance: number }> = {
-  fast:     { steps: 15, guidance: 3.0 },
-  balanced: { steps: 25, guidance: 3.5 },
-  high:     { steps: 40, guidance: 3.5 },
-};
-
-
 export function SceneDetailPanel({ scene, onUpdate }: Props) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
@@ -40,9 +34,17 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
     quality: "balanced",
     duration: "4",
     seed: "-1",
+    aspectRatio: "16:9",
+    firstFrameStrength: LTX_VIDEO_DEFAULTS.firstFrameStrength,
+    lastFrameStrength: LTX_VIDEO_DEFAULTS.lastFrameStrength,
   });
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [isSvdModel, setIsSvdModel] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/config").then(r => r.json()).then(d => setIsSvdModel(d.isSvd)).catch(() => {});
+  }, []);
 
   const prompt = simpleParams.promptEn;
   const quality = simpleParams.quality;
@@ -50,7 +52,10 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
   const seed = simpleParams.seed;
 
   useEffect(() => {
-    setSimpleParams((p) => ({ ...p, promptEn: scene.promptEnOverride ?? scene.promptEn }));
+    setSimpleParams((p) => ({
+      ...p,
+      promptEn: scene.promptEnOverride ?? scene.promptEn,
+    }));
   }, [scene.id, scene.promptEn, scene.promptEnOverride]);
 
   const charCount =
@@ -83,7 +88,7 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
     try {
-      const preset = QUALITY_PRESETS[quality];
+      const preset = QUALITY_STEPS[quality] ?? QUALITY_STEPS.balanced;
       await apiPost("/api/videos", {
         sceneId: scene.id,
         params: {
@@ -93,8 +98,9 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
           qualityPreset: quality,
           steps: preset.steps,
           guidance: preset.guidance,
-          firstFrameStrength: 0.95,
-          lastFrameStrength: 0.70,
+          aspectRatio: simpleParams.aspectRatio,
+          firstFrameStrength: simpleParams.firstFrameStrength,
+          lastFrameStrength: simpleParams.lastFrameStrength,
         },
       });
       addToast("info", t("video.queuedMessage"));
@@ -149,6 +155,23 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+        {/* SVD model warning — prompt has no effect */}
+        {isSvdModel && (
+          <div style={{
+            background: "rgba(255, 150, 0, 0.08)",
+            border: "0.5px solid rgba(255, 150, 0, 0.4)",
+            borderRadius: 6,
+            padding: "8px 10px",
+            marginBottom: 10,
+            fontSize: 11,
+            color: "var(--accent)",
+            lineHeight: 1.5,
+          }}>
+            ⚠ Model hiện tại (<b>SVD</b>) không dùng mô tả văn bản — chỉ animate từ ảnh nhân vật. Các scene sẽ ra video giống nhau nếu dùng cùng ref image.<br />
+            <span style={{ color: "var(--text3)" }}>→ Cài WAN hoặc LTX Video model để dùng được prompt mô tả.</span>
+          </div>
+        )}
+
         {/* Warnings */}
         {warnings.map((w, i) => (
           <div key={i} className="warning-box">

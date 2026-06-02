@@ -1,10 +1,47 @@
 import ffmpeg from "fluent-ffmpeg";
 import path from "path";
 import fs from "fs";
-// storage utilities available via @/lib/storage if needed
+import { spawn } from "child_process";
+
+// PIL-based frame extraction for animated WebP (ffmpeg can't seek ANMF chunks)
+function extractWebPFrame(videoPath: string, outputPath: string, which: "first" | "last"): Promise<void> {
+  const script =
+    which === "last"
+      ? `
+from PIL import Image
+img = Image.open(${JSON.stringify(videoPath)})
+n = 0
+try:
+    while True:
+        n += 1
+        img.seek(n)
+except EOFError:
+    pass
+img.seek(n - 1)
+img.convert('RGB').save(${JSON.stringify(outputPath)})
+`
+      : `
+from PIL import Image
+img = Image.open(${JSON.stringify(videoPath)})
+img.convert('RGB').save(${JSON.stringify(outputPath)})
+`;
+  return new Promise((resolve, reject) => {
+    const proc = spawn("python3", ["-c", script]);
+    let stderr = "";
+    proc.stderr?.on("data", (d) => { stderr += d.toString(); });
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`python3 exited ${code}: ${stderr}`));
+    });
+    proc.on("error", reject);
+  });
+}
 
 // Extract first frame (used as thumbnail)
 export async function extractFirstFrame(videoPath: string, outputPath: string): Promise<void> {
+  if (videoPath.toLowerCase().endsWith(".webp")) {
+    return extractWebPFrame(videoPath, outputPath, "first");
+  }
   return new Promise((resolve, reject) => {
     ffmpeg(videoPath)
       .outputOptions(["-vframes 1", "-q:v 2"])
@@ -17,6 +54,9 @@ export async function extractFirstFrame(videoPath: string, outputPath: string): 
 
 // Extract last frame (used as chain anchor + video node cover)
 export async function extractLastFrame(videoPath: string, outputPath: string): Promise<void> {
+  if (videoPath.toLowerCase().endsWith(".webp")) {
+    return extractWebPFrame(videoPath, outputPath, "last");
+  }
   return new Promise((resolve, reject) => {
     ffmpeg(videoPath)
       .inputOptions(["-sseof -0.5"])

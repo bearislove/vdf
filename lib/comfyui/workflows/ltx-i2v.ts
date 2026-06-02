@@ -1,3 +1,5 @@
+import { LTX_VIDEO_DEFAULTS } from "../defaults";
+
 export const WORKFLOW_VERSION = "1.0.0";
 export const REQUIRED_NODES = [
   "LTXVConditioning",
@@ -13,10 +15,12 @@ interface LTXI2VParams {
   width: number;
   height: number;
   numFrames: number;
+  fps: number;
   seed: number;
   steps: number;
   cfg: number;
   videoModel: string;
+  t5Model?: string;
   firstFrameImage: string;
   lastFrameImage?: string;
   firstFrameStrength: number;
@@ -26,123 +30,90 @@ interface LTXI2VParams {
 
 export function buildLTXI2VWorkflow(params: LTXI2VParams): Record<string, unknown> {
   const seed = params.seed === -1 ? Math.floor(Math.random() * 2 ** 32) : params.seed;
-
-  // LTXVConditioning: (positive, negative, frame_rate) → (pos_cond, neg_cond)
-  // LTXVAddGuide: (positive, negative, vae, latent, image, frame_idx, strength) → (pos_cond, neg_cond, LATENT)
+  const clipRef: [string, number] = params.t5Model ? ["0", 0] : ["1", 1];
+  const d = LTX_VIDEO_DEFAULTS;
 
   const workflow: Record<string, unknown> = {
+    ...(params.t5Model ? {
+      "0": {
+        class_type: "CLIPLoader",
+        inputs: { clip_name: params.t5Model, type: "ltxv" },
+      },
+    } : {}),
     "1": {
       class_type: "CheckpointLoaderSimple",
       inputs: { ckpt_name: params.videoModel },
     },
     "2": {
       class_type: "CLIPTextEncode",
-      inputs: { text: params.positivePrompt, clip: ["1", 1] },
+      inputs: { text: params.positivePrompt, clip: clipRef },
     },
     "3": {
       class_type: "CLIPTextEncode",
-      inputs: {
-        text: params.negativePrompt || "blurry, deformed",
-        clip: ["1", 1],
-      },
+      inputs: { text: params.negativePrompt || "blurry, deformed", clip: clipRef },
     },
     "4": {
       class_type: "LTXVConditioning",
-      inputs: {
-        positive: ["2", 0],
-        negative: ["3", 0],
-        frame_rate: 24,
-      },
+      inputs: { positive: ["2", 0], negative: ["3", 0], frame_rate: params.fps },
     },
     "5": {
       class_type: "EmptyLTXVLatentVideo",
-      inputs: {
-        width: params.width,
-        height: params.height,
-        length: params.numFrames,
-        batch_size: 1,
-      },
+      inputs: { width: params.width, height: params.height, length: params.numFrames, batch_size: 1 },
     },
     "6": {
       class_type: "ModelSamplingLTXV",
-      inputs: { model: ["1", 0], max_shift: 2.05, base_shift: 0.95 },
+      inputs: { model: ["1", 0], max_shift: d.maxShift, base_shift: d.baseShift },
     },
   };
 
-  // Current conditioning source (pos@0, neg@1, latent@2 for LTXVAddGuide outputs)
-  // For base LTXVConditioning: pos@0, neg@1 — latent stays from EmptyLTXVLatentVideo
-  let condNodeId = "4";
-  let latentNodeId = "5";
-  let latentSlot = 0;
+  // Track conditioning/latent chain through LTXVAddGuide nodes
+  let condRef: [string, number] = ["4", 0];
+  let negRef:  [string, number] = ["4", 1];
+  let latentRef: [string, number] = ["5", 0];
   let nextId = 7;
 
-  // First frame guide: LTXVAddGuide outputs pos, neg, latent
-  if (params.firstFrameImage) {
-    workflow[String(nextId)] = {
-      class_type: "LoadImage",
-      inputs: { image: params.firstFrameImage, upload: "image" },
-    };
+  const addGuide = (imgFilename: string, frameIdx: number, strength: number) => {
     const loadId = String(nextId++);
-    workflow[String(nextId)] = {
-      class_type: "LTXVAddGuide",
-      inputs: {
-        positive: [condNodeId, 0],
-        negative: [condNodeId, 1],
-        vae: ["1", 2],
-        latent: [latentNodeId, latentSlot],
-        image: [loadId, 0],
-        frame_idx: 0,
-        strength: params.firstFrameStrength,
-      },
-    };
-    condNodeId = String(nextId);
-    latentNodeId = String(nextId);
-    latentSlot = 2;
-    nextId++;
-  }
-
-  // Last frame guide (chaining from previous scene)
-  if (params.lastFrameImage) {
-    workflow[String(nextId)] = {
+    const guideId = String(nextId++);
+    workflow[loadId] = {
       class_type: "LoadImage",
-      inputs: { image: params.lastFrameImage, upload: "image" },
+      inputs: { image: imgFilename, upload: "image" },
     };
-    const loadLastId = String(nextId++);
-    // Use numFrames - 1 as last frame index
-    workflow[String(nextId)] = {
+    workflow[guideId] = {
       class_type: "LTXVAddGuide",
       inputs: {
-        positive: [condNodeId, 0],
-        negative: [condNodeId, 1],
+        positive: condRef,
+        negative: negRef,
         vae: ["1", 2],
-        latent: [latentNodeId, latentSlot],
-        image: [loadLastId, 0],
-        frame_idx: params.numFrames - 1,
-        strength: params.lastFrameStrength,
+        latent: latentRef,
+        image: [loadId, 0],
+        frame_idx: frameIdx,
+        strength,
       },
     };
-    condNodeId = String(nextId);
-    latentNodeId = String(nextId);
-    latentSlot = 2;
-    nextId++;
+    condRef   = [guideId, 0];
+    negRef    = [guideId, 1];
+    latentRef = [guideId, 2];
+  };
+
+  if (params.firstFrameImage) {
+    addGuide(params.firstFrameImage, 0, params.firstFrameStrength);
+  }
+  if (params.lastFrameImage) {
+    addGuide(params.lastFrameImage, params.numFrames - 1, params.lastFrameStrength);
   }
 
-  const guiderId = String(nextId++);
-  const noiseId = String(nextId++);
-  const samplerId = String(nextId++);
-  const schedulerId = String(nextId++);
+  const guiderId     = String(nextId++);
+  const noiseId      = String(nextId++);
+  const samplerId    = String(nextId++);
+  const schedulerId  = String(nextId++);
   const samplerAdvId = String(nextId++);
-  const vaeDecodeId = String(nextId++);
-  const saveId = String(nextId++);
+  const vaeDecodeId  = String(nextId++);
+  const saveId       = String(nextId++);
 
   workflow[guiderId] = {
     class_type: "CFGGuider",
-    inputs: {
-      model: ["6", 0],
-      positive: [condNodeId, 0],
-      negative: [condNodeId, 1],
-      cfg: params.cfg,
-    },
+    inputs: { model: ["6", 0], positive: condRef, negative: negRef, cfg: params.cfg },
   };
   workflow[noiseId] = {
     class_type: "RandomNoise",
@@ -156,11 +127,11 @@ export function buildLTXI2VWorkflow(params: LTXI2VParams): Record<string, unknow
     class_type: "LTXVScheduler",
     inputs: {
       steps: params.steps,
-      max_shift: 2.05,
-      base_shift: 0.95,
+      max_shift: d.maxShift,
+      base_shift: d.baseShift,
       stretch: true,
       terminal: 0.1,
-      latent: [latentNodeId, latentSlot],
+      latent: latentRef,
     },
   };
   workflow[samplerAdvId] = {
@@ -170,19 +141,26 @@ export function buildLTXI2VWorkflow(params: LTXI2VParams): Record<string, unknow
       guider: [guiderId, 0],
       sampler: [samplerId, 0],
       sigmas: [schedulerId, 0],
-      latent_image: [latentNodeId, latentSlot],
+      latent_image: latentRef,
     },
   };
   workflow[vaeDecodeId] = {
     class_type: "VAEDecodeTiled",
-    inputs: { samples: [samplerAdvId, 0], vae: ["1", 2], tile_size: 512, overlap: 64, temporal_size: 64, temporal_overlap: 8 },
+    inputs: {
+      samples: [samplerAdvId, 0],
+      vae: ["1", 2],
+      tile_size: d.tileSize,
+      overlap: d.tileOverlap,
+      temporal_size: d.temporalSize,
+      temporal_overlap: d.temporalOverlap,
+    },
   };
   workflow[saveId] = {
     class_type: "SaveAnimatedWEBP",
     inputs: {
       images: [vaeDecodeId, 0],
       filename_prefix: params.filenamePrefix ?? "ltx_i2v",
-      fps: 24,
+      fps: params.fps,
       lossless: false,
       quality: 85,
       method: "default",

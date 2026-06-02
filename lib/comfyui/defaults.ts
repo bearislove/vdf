@@ -3,11 +3,45 @@ export const LTX_VIDEO_DEFAULTS = {
   height: 720,
   fps: 24,
   numFrames: 97,
+  maxNumFrames: 257,
   steps: 25,
   cfg: 3.0,
-  crossModalSync: 0.3,
   firstFrameStrength: 0.95,
   lastFrameStrength: 0.70,
+  seed: -1,
+  // LTXVScheduler / ModelSamplingLTXV
+  maxShift: 2.05,
+  baseShift: 0.95,
+  // VAEDecodeTiled
+  tileSize: 512,
+  tileOverlap: 64,
+  temporalSize: 64,
+  temporalOverlap: 8,
+};
+
+export const WAN_DEFAULTS = {
+  width: 1280,
+  height: 720,
+  fps: 16,
+  maxNumFrames: 81,
+  steps: 20,
+  cfg: 6.0,
+  seed: -1,
+  tileSize: 512,
+  tileOverlap: 64,
+  temporalSize: 64,
+  temporalOverlap: 8,
+};
+
+export const SVD_DEFAULTS = {
+  width: 1024,
+  height: 576,
+  fps: 6,
+  maxNumFrames: 25,
+  steps: 25,
+  cfg: 2.5,
+  motionBucketId: 127,
+  augmentationLevel: 0.0,
   seed: -1,
 };
 
@@ -35,4 +69,14 @@ export const ASPECT_RATIOS: Record<string, { width: number; height: number }> = 
   "3:2":  { width: 1152, height: 768  },
   "16:9": { width: 1280, height: 720  },
   "9:16": { width: 720,  height: 1280 },
+};
+
+export interface WanSamplerDefaults {
+  name: string;
+  scheduler: string;
+}
+
+export const WAN_SAMPLER_DEFAULTS: WanSamplerDefaults = {
+  name: "euler_ancestral",
+  scheduler: "karras",
 };

@@ -64,7 +64,8 @@ function VariantCard({
   const isGenerating =
     variant.status === "GENERATING_IMAGE" || variant.status === "GENERATING_VIDEO";
   const isFailed = variant.status === "FAILED";
-  const coverImg = variant.lastFramePath || variant.thumbnailPath;
+  const coverImg = variant.lastFramePath || variant.thumbnailPath ||
+    (variant.videoPath?.endsWith(".webp") ? variant.videoPath : null);
   const hasMedia = !!(variant.videoPath || coverImg);
 
   return (

@@ -17,17 +17,15 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { SceneNode } from "./SceneNode";
-import { VideoNode } from "./VideoNode";
 import { DeletableEdge } from "./DeletableEdge";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { apiPut, apiPost } from "@/lib/utils/api";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
-import type { VideoVariant } from "@/types/video";
+import type { VideoVariant } from "@/types/video"; // still used in SceneWithRelations
 
 const nodeTypes = {
   sceneNode: SceneNode,
-  videoNode: VideoNode,
 };
 
 const edgeTypes = {
@@ -36,10 +34,8 @@ const edgeTypes = {
 
 const SCENE_NODE_W = 172;
 const SCENE_NODE_H = 140;
-const VIDEO_GAP = 14; // gap between scene and video node
 
 const edgeStyle = { stroke: "#444444", strokeWidth: 1 };
-const videoEdgeStyle = { stroke: "var(--border2)", strokeWidth: 1.5 };
 
 const defaultEdgeOptions = {
   style: edgeStyle,
@@ -92,33 +88,6 @@ function buildNodes(
       selected: scene.id === selectedSceneId,
     });
 
-    // Video node — if there's a selected/done video
-    const doneVariant =
-      s.selectedVideo?.status === "DONE"
-        ? s.selectedVideo
-        : s.videoVariants?.find((v) => v.status === "DONE");
-
-    if (doneVariant) {
-      const videoNodeId = `video-${doneVariant.id}`;
-      const VIDEO_NODE_W = 120;
-      const VIDEO_NODE_H = 100;
-      // Default: căn giữa theo chiều ngang, đặt phía trên scene
-      const offsetX = doneVariant.canvasX ?? (SCENE_NODE_W - VIDEO_NODE_W) / 2;
-      const offsetY = doneVariant.canvasY ?? -(VIDEO_NODE_H + VIDEO_GAP);
-      nodes.push({
-        id: videoNodeId,
-        type: "videoNode",
-        // parentNode: VideoNode moves with SceneNode automatically (React Flow v11)
-        parentNode: scene.id,
-        position: { x: offsetX, y: offsetY },
-        data: {
-          variant: doneVariant,
-          sceneTitle: scene.title || `Cảnh ${scene.order + 1}`,
-        },
-        draggable: true,
-        zIndex: 1,
-      } as Parameters<typeof nodes.push>[0]);
-    }
   }
 
   return nodes;
@@ -146,24 +115,6 @@ function buildEdges(
       }
     }
 
-    // Scene → VideoNode edge (dashed accent)
-    const s = scene as SceneWithRelations;
-    const doneVariant =
-      s.selectedVideo?.status === "DONE"
-        ? s.selectedVideo
-        : s.videoVariants?.find((v) => v.status === "DONE");
-
-    if (doneVariant) {
-      edges.push({
-        id: `vid-${doneVariant.id}`,
-        source: scene.id,
-        sourceHandle: "to-video",   // top handle của SceneNode
-        target: `video-${doneVariant.id}`,
-        style: videoEdgeStyle,
-        type: "straight",
-        markerEnd: undefined,
-      });
-    }
   }
 
   return edges;
@@ -296,13 +247,21 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // Rebuild nodes only when scene data changes — preserve React Flow positions
   useEffect(() => {
     setNodes(buildNodes(scenes, selectedSceneId, handleRemoveLink, handleDropObject, (id) => {
       const scene = cbRef.current.scenes.find((s) => s.id === id);
       setDeleteTarget({ kind: "scene", id, label: scene?.title || `Cảnh ${scene?.order ?? 0}` });
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenes, selectedSceneId, setNodes]);
+  }, [scenes, setNodes]);
+
+  // Only toggle selected flag — never touch positions
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((n) => ({ ...n, selected: n.type === "sceneNode" && n.id === selectedSceneId }))
+    );
+  }, [selectedSceneId, setNodes]);
 
   useEffect(() => {
     setEdges(buildEdges(scenes, (sourceId, targetId) =>
@@ -335,15 +294,6 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
           await apiPut(`/api/scenes/${node.id}`, {
             canvasX: node.position.x,
             canvasY: node.position.y,
-          });
-        } else if (node.type === "videoNode") {
-          // node.id = "video-{variantId}" — extract variant ID
-          const variantId = node.id.replace(/^video-/, "");
-          // position is relative to parent SceneNode (canvasX/canvasY = offset)
-          await fetch(`/api/videos/${variantId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ canvasX: node.position.x, canvasY: node.position.y }),
           });
         }
       }, 500);

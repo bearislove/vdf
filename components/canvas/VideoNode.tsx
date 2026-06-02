@@ -16,8 +16,9 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
   const [showModal, setShowModal] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Cover image: prefer lastFramePath, then thumbnailPath
-  const coverImg = variant.lastFramePath || variant.thumbnailPath;
+  // Cover image: prefer extracted frame, fall back to video itself (browsers display WebP natively)
+  const coverImg = variant.lastFramePath || variant.thumbnailPath ||
+    (variant.videoPath?.endsWith(".webp") ? variant.videoPath : null);
   const videoSrc = variant.videoPath;
   const isWebP = videoSrc?.endsWith(".webp");
 

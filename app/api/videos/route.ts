@@ -8,7 +8,6 @@ import fs from "fs";
 import path from "path";
 
 const COMFYUI_URL = process.env.COMFYUI_URL ?? "http://localhost:8188";
-const TIMEOUT = parseInt(process.env.COMFYUI_TIMEOUT ?? "300") * 1000;
 
 export async function POST(req: NextRequest) {
   const { sceneId, params: videoParams } = await req.json();
@@ -35,25 +34,33 @@ export async function POST(req: NextRequest) {
   });
   const previousVariant = prevScene?.selectedVideo ?? prevScene?.videoVariants?.[0] ?? null;
 
-  // Build workflow
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // Create variant first to get the real ID for filenamePrefix
+  const variant = await prisma.videoVariant.create({
+    data: {
+      sceneId,
+      paramsSnapshot: videoParams ?? {},
+      workflowSnapshot: {},
+      status: "QUEUED",
+      strategy: "t2v",
+    },
+  });
+
+  // Build workflow with actual variantId so ComfyUI output is named correctly
   const { workflow, strategy, uploadedImages } = await buildWorkflow({
     scene: scene as unknown as Parameters<typeof buildWorkflow>[0]["scene"],
     objects: scene.objectLinks.map((l) => l.object) as unknown as Parameters<typeof buildWorkflow>[0]["objects"],
-    variantId: "temp",
+    variantId: variant.id,
     filmId,
     episodeId,
     videoParams: videoParams ?? {},
     previousVariant: previousVariant as unknown as Parameters<typeof buildWorkflow>[0]["previousVariant"],
   });
 
-  // Create variant record
-  const variant = await prisma.videoVariant.create({
+  // Persist final workflow snapshot and strategy
+  await prisma.videoVariant.update({
+    where: { id: variant.id },
     data: {
-      sceneId,
-      paramsSnapshot: videoParams ?? {},
       workflowSnapshot: workflow as import("@prisma/client").Prisma.InputJsonValue,
-      status: "QUEUED",
       strategy,
     },
   });
@@ -254,7 +261,7 @@ export async function POST(req: NextRequest) {
           settle(async () => {
             await startRecoveryPolling("WebSocket timeout");
           });
-        }, TIMEOUT);
+        }, parseInt(process.env.COMFYUI_TIMEOUT ?? "300") * 1000);
       });
     } catch (e) {
       await prisma.videoVariant.update({
