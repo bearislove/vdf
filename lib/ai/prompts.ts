@@ -2,8 +2,13 @@ export const SYSTEM_SCREENWRITER = `You are a professional screenwriter and film
 
 export const SYSTEM_PRODUCTION = `You are a film production assistant. Return ONLY valid JSON, no markdown fences, no explanation.`;
 
-export function promptTranslateExpand(storyRaw: string): string {
-  return `Translate the following story to English and expand it with cinematic details, character emotions, lighting, atmosphere. Keep the core plot intact. Output ONLY the expanded English story text.
+export function promptTranslateExpand(storyRaw: string, revisionRequest?: string): string {
+  const revisionBlock = revisionRequest?.trim()
+    ? `\nRevision request from the creator:\n${revisionRequest.trim()}\nApply this request while preserving any story elements it does not ask to change.\n`
+    : "";
+
+  return `Translate the following story to English and expand it with cinematic details, character emotions, lighting, atmosphere. Keep the core plot intact unless the revision request explicitly asks for a plot change. Output ONLY the expanded English story text.
+${revisionBlock}
 
 Story:
 ${storyRaw}`;

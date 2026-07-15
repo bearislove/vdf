@@ -1,4 +1,5 @@
 export type VideoStatus = "QUEUED" | "GENERATING_IMAGE" | "GENERATING_VIDEO" | "DONE" | "FAILED";
+export type GenerationProvider = "COMFYUI" | "AGNES";
 
 export interface VideoVariant {
   id: string;
@@ -7,6 +8,8 @@ export interface VideoVariant {
   workflowSnapshot: Record<string, unknown>;
   comfyPromptId: string | null;
   comfyClientId: string | null;
+  provider: GenerationProvider;
+  externalJobId: string | null;
   status: VideoStatus;
   statusMessage: string;
   errorDetail: string | null;
@@ -25,25 +28,4 @@ export interface VideoVariant {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
-}
-
-export interface VideoParams {
-  // Simple mode
-  promptEn: string;
-  negativePrompt: string;
-  numFrames: number;
-  seed: number;
-  firstFrameStrength: number;
-  lastFrameStrength: number;
-  qualityPreset: "fast" | "balanced" | "high";
-  aspectRatio: "1:1" | "2:3" | "3:2" | "16:9" | "9:16";
-  // Pro mode
-  steps?: number;
-  cfg?: number;
-  crossModalSync?: number;
-  width?: number;
-  height?: number;
-  fps?: number;
-  icLoraStrength?: number;
-  audioRef?: string;
 }

@@ -1,20 +1,13 @@
 "use client";
 
 import { useTranslation } from "@/hooks/useTranslation";
+import { SettingsSection } from "./SettingsSection";
 
 export function StorageSettings() {
   const { t } = useTranslation();
 
   return (
-    <div>
-      <div
-        style={{
-          fontSize: 11, fontWeight: 500, color: "var(--text1)",
-          paddingBottom: 6, borderBottom: "0.5px solid var(--border)", marginBottom: 9,
-        }}
-      >
-        {t("settings.sections.storage")}
-      </div>
+    <SettingsSection title={t("settings.sections.storage")}>
 
       <div style={{ marginBottom: 10 }}>
         <label style={{ fontSize: 10, fontWeight: 500, color: "var(--text2)", display: "block", marginBottom: 4 }}>
@@ -65,6 +58,6 @@ export function StorageSettings() {
       >
         {t("settings.storage.fileServeInfo")}
       </div>
-    </div>
+    </SettingsSection>
   );
 }

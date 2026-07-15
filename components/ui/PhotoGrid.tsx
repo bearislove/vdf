@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { IconEye, IconStar, IconTrash } from "@tabler/icons-react";
+import { useTranslation } from "@/hooks/useTranslation";
+import { MediaActionButton } from "./MediaActionButton";
 
 export interface PhotoItem {
   path: string;
@@ -57,6 +60,7 @@ function PhotoCell({
   onDelete: () => void;
   onPreview?: () => void;
 }) {
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -87,7 +91,7 @@ function PhotoCell({
             padding: "1px 4px", borderRadius: 2, pointerEvents: "none",
           }}
         >
-          Chính
+          {t("object.mainBadge")}
         </div>
       )}
       {hovered && (
@@ -100,38 +104,18 @@ function PhotoCell({
           }}
         >
           {!photo.isMain && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSetMain(); }}
-              style={{
-                background: "var(--accent)", border: "none", color: "#000",
-                fontSize: 9, padding: "2px 6px", borderRadius: 3,
-                cursor: "pointer", width: "auto",
-              }}
-            >
-              Đặt chính
-            </button>
+            <MediaActionButton label={t("object.setAsMain")} onClick={onSetMain} tone="primary">
+              <IconStar size={14} />
+            </MediaActionButton>
           )}
           {onPreview && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPreview(); }}
-              style={{
-                background: "rgba(255,255,255,0.15)", border: "0.5px solid rgba(255,255,255,0.4)",
-                color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 3,
-                cursor: "pointer", width: "auto",
-              }}
-            >
-              Xem
-            </button>
+            <MediaActionButton label={t("common.view")} onClick={onPreview}>
+              <IconEye size={14} />
+            </MediaActionButton>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            style={{
-              background: "none", border: "none", color: "var(--red)",
-              fontSize: 10, cursor: "pointer", width: "auto",
-            }}
-          >
-            Xóa
-          </button>
+          <MediaActionButton label={t("common.delete")} onClick={onDelete} tone="danger">
+            <IconTrash size={14} />
+          </MediaActionButton>
         </div>
       )}
     </div>

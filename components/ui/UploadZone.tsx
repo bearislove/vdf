@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { IconLoader2, IconUpload } from "@tabler/icons-react";
 
 interface UploadZoneProps {
   accept?: string;
@@ -9,7 +10,9 @@ interface UploadZoneProps {
   label?: string;
   hint?: string;
   loading?: boolean;
+  loadingLabel?: string;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 export function UploadZone({
@@ -19,16 +22,19 @@ export function UploadZone({
   label = "Kéo file vào đây",
   hint = "JPG PNG WEBP",
   loading = false,
+  loadingLabel = "Uploading...",
   className,
+  style,
 }: UploadZoneProps) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
     <>
-      <div
+      <button
+        type="button"
         className={className}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => { if (!loading) inputRef.current?.click(); }}
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
@@ -37,6 +43,7 @@ export function UploadZone({
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         style={{
+          width: "100%",
           border: `1px dashed ${dragOver ? "var(--accent)" : "var(--border2)"}`,
           borderRadius: 6,
           padding: "8px 10px",
@@ -47,19 +54,26 @@ export function UploadZone({
           background: dragOver ? "rgba(255,156,42,0.05)" : "transparent",
           transition: "border-color 150ms, color 150ms, background 150ms",
           opacity: loading ? 0.6 : 1,
+          ...style,
         }}
+        disabled={loading}
       >
-        <span style={{ marginRight: 4 }}>{loading ? "⟳" : "☁"}</span>
-        {loading ? "Đang upload..." : label}
+        {loading
+          ? <IconLoader2 className="loading-spinner" size={14} style={{ marginRight: 5, verticalAlign: -2 }} />
+          : <IconUpload size={14} style={{ marginRight: 5, verticalAlign: -2 }} />}
+        {loading ? loadingLabel : label}
         {hint && <span style={{ color: "var(--text3)", marginLeft: 4 }}>· {hint}</span>}
-      </div>
+      </button>
       <input
         ref={inputRef}
         type="file"
         accept={accept}
         multiple={multiple}
         style={{ display: "none" }}
-        onChange={(e) => e.target.files && onFiles(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files) onFiles(e.target.files);
+          e.target.value = "";
+        }}
       />
     </>
   );

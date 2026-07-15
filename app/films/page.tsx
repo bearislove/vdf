@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { FilmCard, NewFilmCard } from "@/components/films/FilmCard";
+import { ModalDialog } from "@/components/ui/ModalDialog";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAppStore } from "@/store/useAppStore";
 import type { Film } from "@/types/film";
@@ -82,42 +83,15 @@ export default function FilmsPage() {
 
         {/* Create modal */}
         {showCreate && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 100,
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowCreate(false);
-            }}
-          >
-            <div
-              style={{
-                background: "var(--bg1)",
-                border: "0.5px solid var(--border)",
-                borderRadius: 10,
-                padding: 20,
-                width: 360,
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 16 }}>
-                {t("film.new")}
-              </div>
-              <label className="form-label">{t("film.nameLabel")}</label>
-              <input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder={t("film.namePlaceholder")}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                autoFocus
-              />
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                <button className="btn" onClick={() => setShowCreate(false)}>
+          <ModalDialog
+            title={t("film.new")}
+            onClose={() => setShowCreate(false)}
+            busy={creating}
+            width="min(380px, 96vw)"
+            zIndex={100}
+            footer={
+              <>
+                <button className="btn" onClick={() => setShowCreate(false)} disabled={creating}>
                   {t("common.cancel")}
                 </button>
                 <button
@@ -127,9 +101,18 @@ export default function FilmsPage() {
                 >
                   {creating ? t("common.processing") : t("common.create")}
                 </button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          >
+            <label className="form-label">{t("film.nameLabel")}</label>
+            <input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder={t("film.namePlaceholder")}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              autoFocus
+            />
+          </ModalDialog>
         )}
 
         {/* Film grid */}

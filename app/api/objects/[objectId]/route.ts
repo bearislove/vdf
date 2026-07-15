@@ -19,7 +19,6 @@ export async function PUT(req: NextRequest, { params }: { params: { objectId: st
       type: body.type,
       descriptionEn: body.descriptionEn,
       refImages: body.refImages,
-      audioRefPath: body.audioRefPath,
       loraPath: body.loraPath,
       flux2Params: body.flux2Params,
       canvasX: body.canvasX,

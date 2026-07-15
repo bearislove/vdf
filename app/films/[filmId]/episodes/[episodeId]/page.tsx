@@ -116,7 +116,6 @@ export default function EpisodePage({ params }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <Topbar
-        showMode
         breadcrumbs={[
           { label: t("nav.films"), href: "/films" },
           { label: film?.title ?? "...", href: `/films/${params.filmId}` },

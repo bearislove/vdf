@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getHistory, downloadOutput } from "@/lib/comfyui/client";
-import { variantDir, ensureDir, storageRelative, STORAGE_ROOT } from "@/lib/storage";
-import { extractFirstFrame, extractLastFrame, getVideoDuration } from "@/lib/ffmpeg";
-import fs from "fs";
-import path from "path";
+import { getVideoProvider } from "@/lib/providers/registry";
+import { finalizeVideoFile } from "@/lib/video/finalize-video-file";
+import type { VideoGenHooks } from "@/lib/providers/types";
 
 export async function POST(
   _: NextRequest,
@@ -18,103 +16,46 @@ export async function POST(
 
     if (!variant) return NextResponse.json({ error: "Variant not found" }, { status: 404 });
     if (!variant.scene) return NextResponse.json({ error: "Scene not found (may have been deleted)" }, { status: 404 });
-    if (!variant.comfyPromptId) {
-      return NextResponse.json({ status: "no_prompt_id", message: "Variant was never submitted to ComfyUI" });
-    }
 
-    // Query ComfyUI history
-    let history: Awaited<ReturnType<typeof getHistory>>;
-    try {
-      history = await getHistory(variant.comfyPromptId);
-    } catch (e) {
-      return NextResponse.json({ status: "comfyui_unreachable", message: String(e) }, { status: 502 });
-    }
+    const provider = getVideoProvider(variant.provider === "AGNES" ? "agnes" : "comfyui");
 
-    if (!history) {
-      // ComfyUI doesn't know this job — could be cleared from history
-      return NextResponse.json({ status: "not_found_in_comfyui", message: "Job not found in ComfyUI history (may have been cleared)" });
-    }
+    let recoveredVideoPath: string | undefined;
+    const hooks: VideoGenHooks = {
+      async onSubmitted() { /* recovery never re-submits */ },
+      async onProgress() { /* recovery is a one-shot check */ },
+      async onComplete(buffer, ext) {
+        recoveredVideoPath = await finalizeVideoFile({
+          variantId: variant.id,
+          filmId: variant.scene!.episode.filmId,
+          episodeId: variant.scene!.episodeId,
+          sceneId: variant.sceneId,
+          buffer,
+          ext,
+        });
+      },
+      async onError(message) {
+        await prisma.videoVariant.update({
+          where: { id: variant.id },
+          data: { status: "FAILED", errorDetail: typeof message === "string" ? message : JSON.stringify(message) },
+        });
+      },
+    };
 
-    // Still running
-    if (!history.status?.completed) {
+    const result = await provider.recoverVideo(variant, hooks);
+
+    if (result.status === "still_running") {
       await prisma.videoVariant.update({
         where: { id: variant.id },
         data: { status: "GENERATING_VIDEO", errorDetail: null },
       });
-      return NextResponse.json({ status: "still_running", message: "Job is still running in ComfyUI" });
     }
 
-    // ComfyUI reported error
-    if (history.status?.status_str === "error") {
-      const msgs: string[][] = history.status?.messages ?? [];
-      const errMsg = msgs.find((m: string[]) => m[0] === "execution_error");
-      const detail = errMsg ? JSON.stringify(errMsg[1]).slice(0, 300) : "ComfyUI execution error";
-      await prisma.videoVariant.update({
-        where: { id: variant.id },
-        data: { status: "FAILED", errorDetail: detail },
-      });
-      return NextResponse.json({ status: "comfyui_error", message: detail });
-    }
+    const body =
+      result.status === "recovered"
+        ? { status: "recovered", videoPath: recoveredVideoPath }
+        : { status: result.status, message: result.message };
 
-    // Completed — download output
-    const filmId = variant.scene.episode.filmId;
-    const episodeId = variant.scene.episodeId;
-    const sceneId = variant.sceneId;
-    const vDir = variantDir(filmId, episodeId, sceneId, variant.id);
-    ensureDir(vDir);
-
-    let videoPath: string | null = null;
-    if (history.outputs) {
-      for (const nodeOut of Object.values(history.outputs) as Array<{ images?: Array<{ filename: string; subfolder: string; type: string }> }>) {
-        if (nodeOut?.images?.length) {
-          const img = nodeOut.images[0];
-          try {
-            const buf = await downloadOutput(img.filename, img.subfolder, img.type);
-            const ext = path.extname(img.filename) || ".webp";
-            const outPath = path.join(vDir, `video${ext}`);
-            fs.writeFileSync(outPath, buf);
-            videoPath = storageRelative(outPath);
-          } catch (e) {
-            return NextResponse.json({ status: "download_failed", message: String(e) }, { status: 500 });
-          }
-          break;
-        }
-      }
-    }
-
-    if (!videoPath) {
-      return NextResponse.json({ status: "no_output", message: "ComfyUI completed but produced no output images" });
-    }
-
-    // Extract thumbnail + last frame + duration
-    let thumbnailPath: string | null = null;
-    let lastFramePath: string | null = null;
-    let durationSeconds: number | null = null;
-
-    const abs = path.resolve(STORAGE_ROOT, videoPath);
-    if (fs.existsSync(abs)) {
-      try { const t = path.join(vDir, "thumbnail.png"); await extractFirstFrame(abs, t); thumbnailPath = storageRelative(t); } catch { /**/ }
-      try { const l = path.join(vDir, "last_frame.png"); await extractLastFrame(abs, l); lastFramePath = storageRelative(l); } catch { /**/ }
-      try {
-        const dur = await getVideoDuration(abs);
-        durationSeconds = typeof dur === "number" && isFinite(dur) ? dur : null;
-      } catch { /**/ }
-    }
-
-    await prisma.videoVariant.update({
-      where: { id: variant.id },
-      data: {
-        status: "DONE",
-        videoPath,
-        thumbnailPath,
-        lastFramePath,
-        durationSeconds,
-        completedAt: new Date(),
-        errorDetail: null,
-      },
-    });
-
-    return NextResponse.json({ status: "recovered", videoPath });
+    return NextResponse.json(body, result.httpStatus ? { status: result.httpStatus } : undefined);
   } catch (e) {
     console.error("[recover]", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });

@@ -1,5 +1,5 @@
 FROM node:20-alpine
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg openssl
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

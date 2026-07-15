@@ -1,25 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { newClientId, submitPrompt, listenToPrompt, downloadOutput, getHistory } from "@/lib/comfyui/client";
-import { buildWorkflow } from "@/lib/comfyui/workflow-builder";
-import { variantDir, ensureDir, storageRelative, STORAGE_ROOT } from "@/lib/storage";
-import { extractLastFrame, extractFirstFrame, getVideoDuration } from "@/lib/ffmpeg";
+import { randomInt } from "crypto";
 import fs from "fs";
-import path from "path";
+import { prisma } from "@/lib/prisma";
+import { resolveFirstFrameImage } from "@/lib/comfyui/prompt";
+import { getVideoProvider, resolveVideoProviderName } from "@/lib/providers/registry";
+import { newestSceneCompositeImage, storageRelative } from "@/lib/storage";
+import { finalizeVideoFile } from "@/lib/video/finalize-video-file";
+import type { VideoGenContext, VideoGenHooks } from "@/lib/providers/types";
+import type { Prisma } from "@prisma/client";
 
-const COMFYUI_URL = process.env.COMFYUI_URL ?? "http://localhost:8188";
+function buildVideoHooks(ids: {
+  variantId: string;
+  filmId: string;
+  episodeId: string;
+  sceneId: string;
+}): VideoGenHooks {
+  return {
+    async onSubmitted(meta) {
+      await prisma.videoVariant.update({
+        where: { id: ids.variantId },
+        data: {
+          status: "GENERATING_VIDEO",
+          ...(meta.strategy !== undefined && { strategy: meta.strategy }),
+          ...(meta.externalJobId !== undefined && { externalJobId: meta.externalJobId }),
+          ...(meta.comfyPromptId !== undefined && { comfyPromptId: meta.comfyPromptId }),
+          ...(meta.comfyClientId !== undefined && { comfyClientId: meta.comfyClientId }),
+          ...(meta.workflowSnapshot !== undefined && {
+            workflowSnapshot: meta.workflowSnapshot as Prisma.InputJsonValue,
+          }),
+        },
+      });
+    },
+    async onProgress(progress) {
+      await prisma.videoVariant.update({
+        where: { id: ids.variantId },
+        data: {
+          ...(progress.step !== undefined && { progressStep: progress.step }),
+          ...(progress.total !== undefined && { progressTotal: progress.total }),
+          ...(progress.currentNode !== undefined && { currentNode: progress.currentNode }),
+          ...(progress.statusMessage !== undefined && { statusMessage: progress.statusMessage }),
+        },
+      }).catch(() => {});
+    },
+    async onComplete(buffer, ext) {
+      await finalizeVideoFile({ ...ids, buffer, ext });
+    },
+    async onError(message) {
+      // message có thể là object nếu provider trả lỗi lạ — ép về string kẻo Prisma từ chối và variant kẹt GENERATING mãi
+      const errorDetail = typeof message === "string" ? message : JSON.stringify(message);
+      await prisma.videoVariant.update({
+        where: { id: ids.variantId },
+        data: { status: "FAILED", errorDetail, completedAt: new Date() },
+      }).catch(() => {});
+    },
+  };
+}
 
 export async function POST(req: NextRequest) {
-  const { sceneId, params: videoParams } = await req.json();
+  const body = await req.json();
+  const { sceneId, provider: bodyProvider } = body;
   if (!sceneId) return NextResponse.json({ error: "sceneId required" }, { status: 400 });
 
-  // Load scene with all relations
+  const requestedParams = body.params && typeof body.params === "object" && !Array.isArray(body.params)
+    ? body.params as Record<string, unknown>
+    : {};
+
   const scene = await prisma.scene.findUnique({
     where: { id: sceneId },
     include: {
       episode: { include: { film: true } },
       objectLinks: { include: { object: true } },
-      videoVariants: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!scene) return NextResponse.json({ error: "Scene not found" }, { status: 404 });
@@ -27,249 +77,75 @@ export async function POST(req: NextRequest) {
   const filmId = scene.episode.filmId;
   const episodeId = scene.episodeId;
 
-  // Get previous scene's last variant for chaining
+  // Previous scene's last variant, for last-frame chaining
   const prevScene = await prisma.scene.findFirst({
     where: { episodeId, order: scene.order - 1 },
     include: { selectedVideo: true, videoVariants: { orderBy: { completedAt: "desc" }, take: 1 } },
   });
   const previousVariant = prevScene?.selectedVideo ?? prevScene?.videoVariants?.[0] ?? null;
 
-  // Create variant first to get the real ID for filenamePrefix
-  const variant = await prisma.videoVariant.create({
-    data: {
-      sceneId,
-      paramsSnapshot: videoParams ?? {},
-      workflowSnapshot: {},
-      status: "QUEUED",
-      strategy: "t2v",
-    },
-  });
-
-  // Build workflow with actual variantId so ComfyUI output is named correctly
-  const { workflow, strategy, uploadedImages } = await buildWorkflow({
-    scene: scene as unknown as Parameters<typeof buildWorkflow>[0]["scene"],
-    objects: scene.objectLinks.map((l) => l.object) as unknown as Parameters<typeof buildWorkflow>[0]["objects"],
-    variantId: variant.id,
-    filmId,
-    episodeId,
-    videoParams: videoParams ?? {},
-    previousVariant: previousVariant as unknown as Parameters<typeof buildWorkflow>[0]["previousVariant"],
-  });
-
-  // Persist final workflow snapshot and strategy
-  await prisma.videoVariant.update({
-    where: { id: variant.id },
-    data: {
-      workflowSnapshot: workflow as import("@prisma/client").Prisma.InputJsonValue,
-      strategy,
-    },
-  });
-
-  const vDir = variantDir(filmId, episodeId, sceneId, variant.id);
-  ensureDir(vDir);
-
-  // Upload reference images to ComfyUI
-  for (const imgPath of uploadedImages) {
-    if (fs.existsSync(imgPath)) {
-      const formData = new FormData();
-      const buffer = fs.readFileSync(imgPath);
-      const blob = new Blob([buffer]);
-      formData.append("image", blob, path.basename(imgPath));
-      await fetch(`${COMFYUI_URL}/upload/image`, {
-        method: "POST",
-        body: formData,
-      }).catch(() => {});
+  // Chưa chọn ảnh nào trong mục Initial reference image → tự lấy ảnh mới nhất và lưu làm ảnh được chọn
+  if (!scene.compositeImagePath) {
+    const newestImage = newestSceneCompositeImage(filmId, episodeId, scene.id);
+    if (newestImage) {
+      scene.compositeImagePath = storageRelative(newestImage);
+      await prisma.scene.update({
+        where: { id: scene.id },
+        data: { compositeImagePath: scene.compositeImagePath },
+      });
     }
   }
 
-  // Submit to ComfyUI and listen async
-  const clientId = newClientId();
+  const resolvedFirstFrame = resolveFirstFrameImage(
+    scene as unknown as VideoGenContext["scene"],
+    previousVariant as VideoGenContext["previousVariant"],
+  );
+  const firstFrameImagePath = resolvedFirstFrame && fs.existsSync(resolvedFirstFrame)
+    ? resolvedFirstFrame
+    : undefined;
+  const referenceImagePath = firstFrameImagePath
+    ? storageRelative(firstFrameImagePath)
+    : null;
+  const videoParams = {
+    ...requestedParams,
+    seed: randomInt(0, 2 ** 31),
+    referenceImagePath,
+  };
 
-  // Fire-and-forget generation
-  (async () => {
-    try {
-      const promptId = await submitPrompt(workflow, clientId);
+  const providerName = resolveVideoProviderName(bodyProvider);
+  const provider = getVideoProvider(providerName);
 
-      await prisma.videoVariant.update({
-        where: { id: variant.id },
-        data: { status: "GENERATING_VIDEO", comfyPromptId: promptId, comfyClientId: clientId },
-      });
+  const baseCtx: Omit<VideoGenContext, "variantId"> = {
+    scene: scene as unknown as VideoGenContext["scene"],
+    videoParams,
+    filmId,
+    episodeId,
+    firstFrameImagePath,
+    previousVariant: previousVariant as VideoGenContext["previousVariant"],
+  };
 
-      type OutputImage = { filename: string; subfolder: string; type: string };
+  const validationError = provider.validate(baseCtx);
+  if (validationError) {
+    return NextResponse.json({ error: validationError }, { status: 400 });
+  }
 
-      // Extract output images from event.outputs or ComfyUI history
-      const resolveOutputImages = async (eventOutputs?: Record<string, unknown>): Promise<OutputImage[]> => {
-        if (eventOutputs) {
-          const imgs = (eventOutputs as { images?: OutputImage[] }).images;
-          if (imgs?.length) return imgs;
-        }
-        const history = await getHistory(promptId);
-        if (history?.outputs) {
-          for (const nodeOut of Object.values(history.outputs) as Array<{ images?: OutputImage[] }>) {
-            if (nodeOut?.images?.length) return nodeOut.images;
-          }
-        }
-        return [];
-      };
+  const variant = await prisma.videoVariant.create({
+    data: {
+      sceneId,
+      paramsSnapshot: videoParams,
+      compositeImagePath: referenceImagePath,
+      workflowSnapshot: {},
+      status: "QUEUED",
+      strategy: "t2v",
+      provider: providerName === "agnes" ? "AGNES" : "COMFYUI",
+    },
+  });
 
-      const handleDone = async (eventOutputs?: Record<string, unknown>) => {
-        let savedPath: string | null = null;
-        let errorDetail: string | null = null;
-        try {
-          const outputImages = await resolveOutputImages(eventOutputs);
-          if (outputImages.length) {
-            const img = outputImages[0];
-            const buffer = await downloadOutput(img.filename, img.subfolder, img.type);
-            const ext = path.extname(img.filename) || ".webp";
-            const outPath = path.join(vDir, `video${ext}`);
-            fs.writeFileSync(outPath, buffer);
-            savedPath = storageRelative(outPath);
-          } else {
-            errorDetail = "No output images from ComfyUI";
-          }
-        } catch (e) {
-          errorDetail = String(e);
-        }
+  const ctx: VideoGenContext = { ...baseCtx, variantId: variant.id };
+  const hooks = buildVideoHooks({ variantId: variant.id, filmId, episodeId, sceneId });
 
-        if (errorDetail) {
-          await prisma.videoVariant.update({
-            where: { id: variant.id },
-            data: { status: "FAILED", errorDetail, completedAt: new Date() },
-          });
-          return;
-        }
-
-        let thumbnailPath: string | null = null;
-        let lastFramePath: string | null = null;
-        let durationSeconds: number | null = null;
-
-        if (savedPath) {
-          const absVideo = path.resolve(STORAGE_ROOT, savedPath);
-          if (fs.existsSync(absVideo)) {
-            try {
-              const thumbOut = path.join(vDir, "thumbnail.png");
-              await extractFirstFrame(absVideo, thumbOut);
-              thumbnailPath = storageRelative(thumbOut);
-            } catch { /* ignore */ }
-            try {
-              const lastFrameOut = path.join(vDir, "last_frame.png");
-              await extractLastFrame(absVideo, lastFrameOut);
-              lastFramePath = storageRelative(lastFrameOut);
-            } catch { /* ignore */ }
-            try {
-              const dur = await getVideoDuration(absVideo);
-              durationSeconds = typeof dur === "number" && isFinite(dur) ? dur : null;
-            } catch { /* ignore */ }
-          }
-        }
-
-        await prisma.videoVariant.update({
-          where: { id: variant.id },
-          data: {
-            status: "DONE",
-            videoPath: savedPath,
-            thumbnailPath,
-            lastFramePath,
-            durationSeconds,
-            completedAt: new Date(),
-          },
-        });
-      };
-
-      let processed = false;
-      let progressDone = false;
-
-      // Recovery polling: dùng khi WS drop hoặc timeout — không mark FAILED ngay
-      const startRecoveryPolling = async (reason: string) => {
-        const INTERVAL = 10_000;   // poll 10s
-        const MAX = 2 * 60 * 60 * 1000; // tối đa 2 giờ
-        const start = Date.now();
-        while (Date.now() - start < MAX) {
-          await new Promise((r) => setTimeout(r, INTERVAL));
-          try {
-            const history = await getHistory(promptId);
-            // null = job vẫn đang chạy hoặc queued (chưa có trong history) → tiếp tục chờ
-            if (!history) continue;
-            if (history.status?.status_str === "error") break;
-            if (history.status?.completed) {
-              await handleDone(undefined);
-              return;
-            }
-            // history tồn tại nhưng chưa completed → còn chạy
-          } catch { /* network error, retry */ }
-        }
-        await prisma.videoVariant.update({
-          where: { id: variant.id },
-          data: { status: "FAILED", errorDetail: `${reason} — timed out after 2h` },
-        }).catch(() => {});
-      };
-
-      await new Promise<void>((resolve) => {
-        let settled = false;
-        const settle = (fn: () => void) => {
-          if (settled) return;
-          settled = true;
-          fn();
-          resolve();
-        };
-
-        const cleanup = listenToPrompt(promptId, clientId, async (event) => {
-          if (event.type === "progress") {
-            if (event.step === event.total && (event.total ?? 0) > 0) progressDone = true;
-            await prisma.videoVariant.update({
-              where: { id: variant.id },
-              data: { progressStep: event.step ?? 0, progressTotal: event.total ?? 0 },
-            }).catch(() => {});
-          } else if (event.type === "node") {
-            await prisma.videoVariant.update({
-              where: { id: variant.id },
-              data: { currentNode: event.node ?? "" },
-            }).catch(() => {});
-          } else if (event.type === "done") {
-            if (processed) return;
-            processed = true;
-            settle(async () => { await handleDone(event.outputs); });
-          } else if (event.type === "error") {
-            // WS bị ngắt — KHÔNG mark FAILED ngay, chuyển sang polling
-            settle(async () => {
-              await startRecoveryPolling("WebSocket disconnected");
-            });
-          }
-        });
-
-        // Fast polling fallback (5s) — dùng khi progress done nhưng WS chưa báo done
-        const pollInterval = setInterval(async () => {
-          if (!progressDone || settled) return;
-          try {
-            const history = await getHistory(promptId);
-            if (history?.status?.completed) {
-              clearInterval(pollInterval);
-              cleanup();
-              if (!processed) {
-                processed = true;
-                settle(async () => { await handleDone(undefined); });
-              }
-            }
-          } catch { /* retry */ }
-        }, 5000);
-
-        // WS timeout — chuyển sang recovery polling, không mark FAILED
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          cleanup();
-          if (settled) return;
-          settle(async () => {
-            await startRecoveryPolling("WebSocket timeout");
-          });
-        }, parseInt(process.env.COMFYUI_TIMEOUT ?? "300") * 1000);
-      });
-    } catch (e) {
-      await prisma.videoVariant.update({
-        where: { id: variant.id },
-        data: { status: "FAILED", errorDetail: String(e) },
-      }).catch(() => {});
-    }
-  })();
+  // Fire-and-forget: tiến trình được theo dõi qua DB (VariantList polling / recover)
+  void provider.runVideoGeneration(ctx, hooks).catch((e) => hooks.onError(String(e)));
 
   return NextResponse.json({ variantId: variant.id }, { status: 202 });
 }

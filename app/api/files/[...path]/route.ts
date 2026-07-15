@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
-import { STORAGE_ROOT } from "@/lib/storage";
+import { Readable } from "stream";
+import { resolveStoragePath } from "@/lib/storage";
 
 const ALLOWED_MIME: Record<string, string> = {
   ".mp4": "video/mp4",
@@ -24,10 +25,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { path: string[] } }
 ) {
-  const requested = path.join(STORAGE_ROOT, ...params.path);
-  const resolved = path.resolve(requested);
-
-  if (!resolved.startsWith(STORAGE_ROOT)) {
+  let resolved: string;
+  try {
+    resolved = resolveStoragePath(path.join(...params.path));
+  } catch {
     return new NextResponse("Forbidden", { status: 403 });
   }
 
@@ -46,7 +47,7 @@ export async function GET(
     const [start, end] = parseRange(range, stat.size);
     const chunkSize = end - start + 1;
     const stream = fs.createReadStream(resolved, { start, end });
-    return new NextResponse(stream as unknown as ReadableStream, {
+    return new NextResponse(Readable.toWeb(stream) as ReadableStream, {
       status: 206,
       headers: {
         "Content-Type": mime,
@@ -58,7 +59,7 @@ export async function GET(
   }
 
   const stream = fs.createReadStream(resolved);
-  return new NextResponse(stream as unknown as ReadableStream, {
+  return new NextResponse(Readable.toWeb(stream) as ReadableStream, {
     headers: {
       "Content-Type": mime,
       "Content-Length": String(stat.size),

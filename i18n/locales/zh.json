@@ -92,7 +92,25 @@
     "enrichStep2": "步骤 2/3 — 分析场景",
     "enrichStep3": "步骤 3/3 — 提取角色与道具",
     "noVideo": "该集暂无视频",
-    "deleteConfirm": "删除此剧集？"
+    "deleteConfirm": "删除此剧集？",
+    "fileTypeError": "仅支持 .md 和 .txt 文件",
+    "aiPreviewOption": "使用 AI 分析并在创建前预览",
+    "analyzePreview": "分析并预览",
+    "analyzingPreview": "分析中...",
+    "previewTitle": "审核剧集内容",
+    "plotPreview": "故事",
+    "charactersAndLocations": "角色与场景",
+    "storyElements": "个元素",
+    "description": "描述",
+    "scenePreview": "场景列表",
+    "sceneTitle": "场景标题",
+    "scenePrompt": "场景描述",
+    "revisionPlaceholder": "让 AI 重写，例如：让结局更具戏剧性...",
+    "regenerate": "重新生成",
+    "regenerating": "重新生成中...",
+    "confirmCreate": "确认并创建",
+    "importing": "正在创建剧集...",
+    "createdSuccess": "剧集及内容已创建"
   },
   "canvas": {
     "objects": "对象 — 拖入场景",
@@ -101,6 +119,7 @@
     "dragHint": "从左侧面板拖入对象到场景中",
     "scene": "场景",
     "generate": "生成视频",
+    "generatingVideo": "正在生成视频...",
     "addVariant": "生成新版本",
     "variants": "视频版本",
     "selectMain": "设为主版本",
@@ -108,10 +127,33 @@
     "sceneNumber": "场景 {n}",
     "addToScene": "+ 添加到场景",
     "charactersAndObjects": "角色与对象",
-    "mode": {
-      "simple": "简单",
-      "pro": "专业"
-    }
+    "initialReferenceImage": "初始参考图",
+    "createInitialImage": "创建参考图",
+    "initialImageDialogTitle": "创建初始参考图",
+    "referenceSource": "参考图来源",
+    "sourceObjects": "当前场景中的对象",
+    "sourcePreviousScene": "上一场景的最后一帧",
+    "sourceUpload": "上传外部图片",
+    "sourceUploadMeta": "JPG、PNG 或 WEBP",
+    "imageEditPrompt": "描述目标图片",
+    "imageEditPromptPlaceholder": "例如：保持面部、服装和姿势不变；将背景替换为夜间城市并使用电影感灯光...",
+    "imageEditPromptHint": "说明需要更改和必须保留的内容，然后描述风格、灯光和构图。",
+    "availableImages": "有 {count} 张可用图片",
+    "noObjectImages": "对象没有参考图片",
+    "noPreviousFrame": "没有可用的上一场景帧",
+    "preparingInitialImage": "正在准备参考图片...",
+    "generatingInitialImage": "正在生成参考图...",
+    "generateInitialImage": "生成图片",
+    "initialImageGenerated": "初始参考图已创建",
+    "noGenerationResponse": "图片服务未返回结果",
+    "referenceImageCount": "{count} 张图片",
+    "generateAnotherImage": "再生成一张",
+    "uploadReferenceImageHint": "点击或拖入 JPG、PNG、WEBP · 每张最大 15 MB",
+    "referenceImageUploaded": "已上传 {count} 张参考图",
+    "selectForVideo": "用于视频",
+    "selectedForVideo": "正在用于视频",
+    "referenceImageSelected": "已选择参考图",
+    "noGeneratedReferenceImages": "暂无参考图"
   },
   "object": {
     "types": {
@@ -120,11 +162,11 @@
       "environment": "环境"
     },
     "refImages": "参考图片",
+    "aiGeneratedImages": "AI 生成图片",
     "mainImage": "主图片",
     "setMain": "设为主图",
     "uploadImages": "拖入图片",
     "generateImage": "根据描述生成图片",
-    "voiceRef": "声音参考",
     "appearsIn": "出现于",
     "noImages": "暂无图片",
     "imageHint": "建议包含正面、侧面、四分之三视角图片",
@@ -136,47 +178,32 @@
     "sendingToComfyUI": "发送至 ComfyUI...",
     "imageGenerated": "图片生成成功",
     "generateFailed": "生成失败",
-    "voiceUploaded": "声音参考已上传",
-    "deleteVoiceRef": "删除声音参考",
-    "uploadVoiceRef": "上传声音参考 · WAV MP3",
     "mainBadge": "主",
-    "setAsMain": "设为主图"
+    "setAsMain": "设为主图",
+    "details": "基本信息",
+    "images": "张图片",
+    "referencesTab": "参考图",
+    "generatedTab": "AI 生成"
   },
   "video": {
     "main": "主视频",
-    "queuedMessage": "已加入生成队列"
+    "queuedMessage": "已加入生成队列",
+    "generationFailed": "视频生成失败",
+    "unknownError": "服务商未返回错误信息。",
+    "recheck": "重新检查",
+    "showFullError": "显示完整错误",
+    "hideError": "收起错误",
+    "referenceImageUsed": "此视频使用的参考图"
   },
   "params": {
     "description": "场景描述",
-    "duration": "时长",
-    "quality": "质量",
-    "qualityOptions": {
-      "fast": "快速（草稿）",
-      "balanced": "平衡",
-      "high": "高质量"
-    },
-    "seed": "种子",
-    "cfgScale": "CFG 比例",
-    "steps": "步数",
-    "sampler": "采样器",
-    "scheduler": "调度器",
-    "denoise": "降噪",
-    "guidance": "Flux 引导",
-    "resolution": "分辨率",
-    "batchSize": "批次大小",
-    "lora": "LoRA",
-    "controlnet": "ControlNet",
-    "precision": "精度",
-    "chainFromPrev": "从上一场景连续",
-    "strategy": "策略",
-    "autoDetect": "自动检测",
-    "videoModelOverride": "视频模型（覆盖）",
-    "videoModelPlaceholder": "留空 = 使用默认"
+    "duration": "时长"
   },
   "settings": {
     "title": "设置",
     "sections": {
       "comfyui": "ComfyUI",
+      "agnes": "Agnes AI",
       "models": "模型",
       "ai": "AI 提供商",
       "storage": "存储",
@@ -185,6 +212,17 @@
     "comfyui": {
       "url": "服务器地址",
       "timeout": "超时（秒）",
+      "test": "测试",
+      "connected": "已连接",
+      "disconnected": "未连接"
+    },
+    "agnes": {
+      "apiKeyWarning": "API 密钥从 .env 中的 AGNES_AI_API_KEY 读取 — 不通过此界面保存。",
+      "imageProvider": "图像提供商（默认）",
+      "videoProvider": "视频提供商（默认）",
+      "imageModel": "图像模型",
+      "videoModel": "视频模型",
+      "modelHint": "可以为每个场景/对象单独选择提供商 — 这里只是初始默认值。",
       "test": "测试",
       "connected": "已连接",
       "disconnected": "未连接"
@@ -217,25 +255,12 @@
       "fileServeInfo": "文件通过 /api/files/[...path] 提供服务 — 路径不直接暴露。"
     },
     "about": {
-      "version": "StoryForge v1.0.0",
+      "version": "VDF v1.0.0",
       "description": "AI 视频制作应用。",
       "techStack": "使用 ComfyUI + LTX Video / Wan2.2 / SVD 从文本故事创建影片。"
     }
   },
   "generation": {
-    "strategy": {
-      "t2v": "文本转视频",
-      "i2v_single": "图像转视频（1 个角色）",
-      "i2v_composite": "FLUX2 合成 + I2V（2+ 角色）",
-      "ic_lora": "IC-LoRA"
-    },
-    "warnings": {
-      "twoCharacters": "2 个角色 → FLUX2 合成 + LTX I2V",
-      "threeCharacters": "3+ 个角色会降低质量 — 建议使用 Wan2.2",
-      "closeUp": "特写镜头使用 Wan2.2 效果更好",
-      "longScene": "超过 4 秒的场景可能出现闪烁",
-      "noImage": "添加图片以提高一致性",
-      "comfyOffline": "ComfyUI 未连接"
-    }
+    "provider": "提供商"
   }
 }

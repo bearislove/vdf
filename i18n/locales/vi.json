@@ -92,7 +92,25 @@
     "enrichStep2": "Bước 2/3 — Phân tích cảnh quay",
     "enrichStep3": "Bước 3/3 — Trích xuất nhân vật & vật thể",
     "noVideo": "Tập chưa có video",
-    "deleteConfirm": "Xóa tập này?"
+    "deleteConfirm": "Xóa tập này?",
+    "fileTypeError": "Chỉ hỗ trợ file .md hoặc .txt",
+    "aiPreviewOption": "Phân tích bằng AI và duyệt trước khi tạo",
+    "analyzePreview": "Phân tích và xem trước",
+    "analyzingPreview": "Đang phân tích...",
+    "previewTitle": "Duyệt nội dung tập phim",
+    "plotPreview": "Cốt truyện",
+    "charactersAndLocations": "Nhân vật và bối cảnh",
+    "storyElements": "thành phần",
+    "description": "Mô tả",
+    "scenePreview": "Danh sách cảnh",
+    "sceneTitle": "Tên cảnh",
+    "scenePrompt": "Mô tả cảnh",
+    "revisionPlaceholder": "Yêu cầu AI viết lại, ví dụ: tăng kịch tính ở đoạn kết...",
+    "regenerate": "Tạo lại",
+    "regenerating": "Đang tạo lại...",
+    "confirmCreate": "Xác nhận và tạo tập",
+    "importing": "Đang tạo tập...",
+    "createdSuccess": "Đã tạo tập và nhập nội dung"
   },
   "canvas": {
     "objects": "Đối tượng — kéo vào scene",
@@ -101,6 +119,7 @@
     "dragHint": "Kéo đối tượng từ panel trái vào scene",
     "scene": "Cảnh",
     "generate": "Tạo video",
+    "generatingVideo": "Đang tạo video...",
     "addVariant": "Tạo thêm bản mới",
     "variants": "Các bản video",
     "selectMain": "Chọn làm chính",
@@ -108,10 +127,33 @@
     "sceneNumber": "Cảnh {n}",
     "addToScene": "+ Thêm vào cảnh này",
     "charactersAndObjects": "Nhân vật & Đối tượng",
-    "mode": {
-      "simple": "Simple",
-      "pro": "Pro"
-    }
+    "initialReferenceImage": "Ảnh tham chiếu khởi đầu",
+    "createInitialImage": "Tạo ảnh tham chiếu",
+    "initialImageDialogTitle": "Tạo ảnh tham chiếu khởi đầu",
+    "referenceSource": "Nguồn ảnh tham chiếu",
+    "sourceObjects": "Object trong scene này",
+    "sourcePreviousScene": "Frame cuối scene trước",
+    "sourceUpload": "Tải ảnh bên ngoài",
+    "sourceUploadMeta": "JPG, PNG hoặc WEBP",
+    "imageEditPrompt": "Mô tả ảnh muốn tạo",
+    "imageEditPromptPlaceholder": "VD: Giữ nguyên khuôn mặt, trang phục và tư thế; đổi bối cảnh thành thành phố về đêm với ánh sáng điện ảnh...",
+    "imageEditPromptHint": "Nêu rõ phần cần thay đổi và phần phải giữ nguyên, sau đó mô tả phong cách, ánh sáng và bố cục.",
+    "availableImages": "Có {count} ảnh khả dụng",
+    "noObjectImages": "Object chưa có ảnh tham chiếu",
+    "noPreviousFrame": "Chưa có frame từ scene trước",
+    "preparingInitialImage": "Đang chuẩn bị ảnh tham chiếu...",
+    "generatingInitialImage": "Đang tạo ảnh tham chiếu...",
+    "generateInitialImage": "Tạo ảnh",
+    "initialImageGenerated": "Đã tạo ảnh tham chiếu khởi đầu",
+    "noGenerationResponse": "Nhà cung cấp không trả về ảnh",
+    "referenceImageCount": "Có {count} ảnh",
+    "generateAnotherImage": "Tạo thêm ảnh",
+    "uploadReferenceImageHint": "Bấm hoặc kéo thả JPG, PNG, WEBP · tối đa 15 MB/ảnh",
+    "referenceImageUploaded": "Đã tải lên {count} ảnh tham chiếu",
+    "selectForVideo": "Dùng cho video",
+    "selectedForVideo": "Đang dùng cho video",
+    "referenceImageSelected": "Đã chọn ảnh tham chiếu",
+    "noGeneratedReferenceImages": "Chưa có ảnh tham chiếu"
   },
   "object": {
     "types": {
@@ -120,11 +162,11 @@
       "environment": "Môi trường"
     },
     "refImages": "Ảnh tham chiếu",
+    "aiGeneratedImages": "Ảnh do AI tạo",
     "mainImage": "Ảnh chính",
     "setMain": "Đặt làm chính",
     "uploadImages": "Kéo ảnh vào đây",
     "generateImage": "Generate ảnh từ mô tả",
-    "voiceRef": "Giọng tham chiếu",
     "appearsIn": "Xuất hiện trong",
     "noImages": "Chưa có ảnh nào",
     "imageHint": "Nên có ảnh mặt trước, bên cạnh, 3/4",
@@ -136,47 +178,32 @@
     "sendingToComfyUI": "Đang gửi tới ComfyUI...",
     "imageGenerated": "Đã generate ảnh thành công",
     "generateFailed": "Generate thất bại",
-    "voiceUploaded": "Đã upload giọng tham chiếu",
-    "deleteVoiceRef": "Xóa giọng tham chiếu",
-    "uploadVoiceRef": "Upload giọng tham chiếu · WAV MP3",
     "mainBadge": "Chính",
-    "setAsMain": "Đặt chính"
+    "setAsMain": "Đặt chính",
+    "details": "Thông tin",
+    "images": "ảnh",
+    "referencesTab": "Tham chiếu",
+    "generatedTab": "AI tạo"
   },
   "video": {
     "main": "Video chính",
-    "queuedMessage": "Đã thêm vào hàng đợi generate"
+    "queuedMessage": "Đã thêm vào hàng đợi generate",
+    "generationFailed": "Tạo video thất bại",
+    "unknownError": "Nhà cung cấp không trả về nội dung lỗi.",
+    "recheck": "Kiểm tra lại",
+    "showFullError": "Xem toàn bộ lỗi",
+    "hideError": "Thu gọn lỗi",
+    "referenceImageUsed": "Ảnh tham chiếu đã dùng cho video này"
   },
   "params": {
     "description": "Mô tả cảnh",
-    "duration": "Thời lượng",
-    "quality": "Chất lượng",
-    "qualityOptions": {
-      "fast": "Nhanh (draft)",
-      "balanced": "Cân bằng",
-      "high": "Chất lượng cao"
-    },
-    "seed": "Seed",
-    "cfgScale": "CFG scale",
-    "steps": "Steps",
-    "sampler": "Sampler",
-    "scheduler": "Scheduler",
-    "denoise": "Denoise",
-    "guidance": "Flux guidance",
-    "resolution": "Resolution",
-    "batchSize": "Batch size",
-    "lora": "LoRA",
-    "controlnet": "ControlNet",
-    "precision": "Precision",
-    "chainFromPrev": "Giữ liên tục từ cảnh trước",
-    "strategy": "Strategy",
-    "autoDetect": "Auto detect",
-    "videoModelOverride": "Video model (override)",
-    "videoModelPlaceholder": "Để trống = dùng default"
+    "duration": "Thời lượng"
   },
   "settings": {
     "title": "Cài đặt",
     "sections": {
       "comfyui": "ComfyUI",
+      "agnes": "Agnes AI",
       "models": "Models",
       "ai": "AI Provider",
       "storage": "Storage",
@@ -187,6 +214,17 @@
       "timeout": "Timeout (giây)",
       "test": "Kiểm tra",
       "connected": "Đang chạy",
+      "disconnected": "Không kết nối được"
+    },
+    "agnes": {
+      "apiKeyWarning": "API key đọc từ AGNES_AI_API_KEY trong file .env — không lưu qua UI này.",
+      "imageProvider": "Provider ảnh (mặc định)",
+      "videoProvider": "Provider video (mặc định)",
+      "imageModel": "Image model",
+      "videoModel": "Video model",
+      "modelHint": "Có thể chọn provider riêng cho từng Scene/Object, mặc định ở đây chỉ là giá trị khởi tạo.",
+      "test": "Kiểm tra",
+      "connected": "Kết nối thành công",
       "disconnected": "Không kết nối được"
     },
     "models": {
@@ -217,25 +255,12 @@
       "fileServeInfo": "Files được serve qua /api/files/[...path] — không expose path trực tiếp."
     },
     "about": {
-      "version": "StoryForge v1.0.0",
+      "version": "VDF v1.0.0",
       "description": "AI Video Production App.",
       "techStack": "Tạo phim từ cốt chuyện văn bản với ComfyUI + LTX Video / Wan2.2 / SVD."
     }
   },
   "generation": {
-    "strategy": {
-      "t2v": "Text-to-Video",
-      "i2v_single": "Image-to-Video (1 nhân vật)",
-      "i2v_composite": "FLUX2 composite + I2V (2+ nhân vật)",
-      "ic_lora": "IC-LoRA"
-    },
-    "warnings": {
-      "twoCharacters": "2 nhân vật → FLUX2 composite + LTX I2V",
-      "threeCharacters": "3+ nhân vật → khuyên dùng Wan2.2",
-      "closeUp": "Close-up cảm xúc → kết quả tốt hơn với Wan2.2",
-      "longScene": "Cảnh dài hơn 4s → có thể bị flickering",
-      "noImage": "Thêm ảnh để tăng độ nhất quán",
-      "comfyOffline": "ComfyUI không kết nối được"
-    }
+    "provider": "Provider"
   }
 }

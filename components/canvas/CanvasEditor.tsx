@@ -22,7 +22,7 @@ import { useCanvasStore } from "@/store/useCanvasStore";
 import { apiPut, apiPost } from "@/lib/utils/api";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
-import type { VideoVariant } from "@/types/video"; // still used in SceneWithRelations
+import type { VideoVariant } from "@/types/video";
 
 const nodeTypes = {
   sceneNode: SceneNode,
@@ -31,9 +31,6 @@ const nodeTypes = {
 const edgeTypes = {
   deletable: DeletableEdge,
 };
-
-const SCENE_NODE_W = 172;
-const SCENE_NODE_H = 140;
 
 const edgeStyle = { stroke: "#444444", strokeWidth: 1 };
 

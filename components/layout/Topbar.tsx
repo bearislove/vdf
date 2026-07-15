@@ -2,18 +2,15 @@
 
 import Link from "next/link";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useAppStore } from "@/store/useAppStore";
 import type { Locale } from "@/i18n/config";
 
 interface TopbarProps {
   breadcrumbs?: { label: string; href?: string }[];
   actions?: React.ReactNode;
-  showMode?: boolean;
 }
 
-export function Topbar({ breadcrumbs, actions, showMode = false }: TopbarProps) {
-  const { t, locale, setLocale } = useTranslation();
-  const { uiMode, setUiMode } = useAppStore();
+export function Topbar({ breadcrumbs, actions }: TopbarProps) {
+  const { locale, setLocale } = useTranslation();
 
   return (
     <header
@@ -61,7 +58,7 @@ export function Topbar({ breadcrumbs, actions, showMode = false }: TopbarProps) 
       {/* App name or breadcrumb */}
       {!breadcrumbs || breadcrumbs.length === 0 ? (
         <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text1)" }}>
-          StoryForge
+          VDF
         </span>
       ) : (
         <nav style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text2)" }}>
@@ -87,38 +84,6 @@ export function Topbar({ breadcrumbs, actions, showMode = false }: TopbarProps) 
 
       {/* Spacer */}
       <div style={{ flex: 1 }} />
-
-      {/* Mode toggle */}
-      {showMode && (
-        <div
-          style={{
-            display: "flex",
-            background: "var(--bg0)",
-            borderRadius: 5,
-            padding: 2,
-            gap: 2,
-          }}
-        >
-          {(["simple", "pro"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setUiMode(m)}
-              style={{
-                fontSize: 10,
-                padding: "3px 9px",
-                borderRadius: 3,
-                border: uiMode === m ? "0.5px solid var(--border2)" : "none",
-                background: uiMode === m ? "var(--bg2)" : "transparent",
-                color: uiMode === m ? "var(--text1)" : "var(--text2)",
-                cursor: "pointer",
-                transition: "all 150ms",
-              }}
-            >
-              {t(`canvas.mode.${m}`)}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Actions */}
       {actions}

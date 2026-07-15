@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { SettingsRow } from "./SettingsRow";
+import { SettingsSection } from "./SettingsSection";
 import type { ComfyUIModels } from "@/types/comfyui";
 
 interface ModelsSettingsProps {
@@ -11,36 +12,24 @@ interface ModelsSettingsProps {
   onReload: () => void;
 }
 
-function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
-      <label style={{ fontSize: 11, color: "var(--text2)", width: 110, flexShrink: 0 }}>{label}</label>
-      <div style={{ flex: 1 }}>{children}</div>
-    </div>
-  );
-}
-
 export function ModelsSettings({ models, loading, onReload }: ModelsSettingsProps) {
   const { t } = useTranslation();
   const settings = useSettingsStore();
-  const [saving, setSaving] = useState(false);
 
-  const allVideoModels = [...(models.checkpoints ?? []), ...(models.diffusion_models ?? [])];
+  const allVideoModels = Array.from(new Set([
+    ...(models.checkpoints ?? []),
+    ...(models.diffusion_models ?? []),
+  ]));
 
   return (
-    <div>
-      <div
-        style={{
-          fontSize: 11, fontWeight: 500, color: "var(--text1)",
-          paddingBottom: 6, borderBottom: "0.5px solid var(--border)", marginBottom: 9,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}
-      >
-        {t("settings.sections.models")}
+    <SettingsSection
+      title={t("settings.sections.models")}
+      action={
         <button className="btn btn-sm" onClick={onReload} disabled={loading}>
           {loading ? "⟳" : t("settings.models.reload")}
         </button>
-      </div>
+      }
+    >
 
       <SettingsRow label={t("settings.models.imageModel")}>
         <select value={settings.defaultImageModel} onChange={(e) => settings.setDefaultImageModel(e.target.value)}>
@@ -68,12 +57,6 @@ export function ModelsSettings({ models, loading, onReload }: ModelsSettingsProp
           {t("settings.models.loadError")}
         </p>
       )}
-
-      <div style={{ borderTop: "0.5px solid var(--border)", paddingTop: 10, marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
-        <button className="btn-p btn-sm" onClick={() => { setSaving(true); setTimeout(() => setSaving(false), 500); }} disabled={saving}>
-          {saving ? "⟳" : t("common.save")}
-        </button>
-      </div>
-    </div>
+    </SettingsSection>
   );
 }

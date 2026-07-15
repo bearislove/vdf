@@ -15,10 +15,8 @@ export interface Scene {
   transitionsTo: string[];
   compositeImagePath: string | null;
   selectedVideoId: string | null;
-  videoModel: string;
   videoParams: Record<string, unknown>;
   useLastFrameChaining: boolean;
-  strategyOverride: GenerationStrategy | null;
   canvasX: number;
   canvasY: number;
   createdAt: string;

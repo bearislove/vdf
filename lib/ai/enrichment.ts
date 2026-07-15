@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAIClient, getAIModel } from "./provider";
+import { getLLMProvider } from "@/lib/providers/registry";
 import {
   SYSTEM_SCREENWRITER,
   SYSTEM_PRODUCTION,
@@ -10,7 +10,7 @@ import {
 
 const ShotTypeEnum = z.enum(["wide", "medium", "close", "aerial", "pov"]);
 
-const SceneSchema = z.object({
+export const SceneSchema = z.object({
   scenes: z.array(
     z.object({
       id: z.string(),
@@ -26,7 +26,7 @@ const SceneSchema = z.object({
   ),
 });
 
-const ObjectsSchema = z.object({
+export const ObjectsSchema = z.object({
   objects: z.array(
     z.object({
       id: z.string(),
@@ -46,6 +46,15 @@ const ObjectsSchema = z.object({
 
 export type ParsedScenes = z.infer<typeof SceneSchema>;
 export type ParsedObjects = z.infer<typeof ObjectsSchema>;
+
+export const EnrichmentSchema = z.object({
+  storyEnriched: z.string().min(1),
+  scenes: SceneSchema.shape.scenes.min(1),
+  objects: ObjectsSchema.shape.objects,
+  links: ObjectsSchema.shape.links,
+});
+
+export type EnrichmentResult = z.infer<typeof EnrichmentSchema>;
 
 async function callWithRetry<T>(
   fn: () => Promise<string>,
@@ -71,32 +80,19 @@ async function callWithRetry<T>(
   throw new Error(`AI validation failed after ${maxRetries} retries: ${lastError}`);
 }
 
-async function callAI(system: string, user: string): Promise<string> {
-  const client = getAIClient();
-  const res = await client.chat.completions.create({
-    model: getAIModel(),
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    temperature: 0.7,
-  });
-  return res.choices[0]?.message?.content ?? "";
+function callAI(system: string, user: string): Promise<string> {
+  return getLLMProvider().chatComplete(system, user, { temperature: 0.7 });
 }
 
 export async function runEnrichment(
   storyRaw: string,
-  existingObjects: Array<{ name: string; type: string; description_en: string }> = []
-): Promise<{
-  storyEnriched: string;
-  scenes: ParsedScenes["scenes"];
-  objects: ParsedObjects["objects"];
-  links: ParsedObjects["links"];
-}> {
+  existingObjects: Array<{ name: string; type: string; description_en: string }> = [],
+  revisionRequest?: string
+): Promise<EnrichmentResult> {
   // Call 1: Translate + expand
   const storyEnriched = await callAI(
     SYSTEM_SCREENWRITER,
-    promptTranslateExpand(storyRaw)
+    promptTranslateExpand(storyRaw, revisionRequest)
   );
 
   // Call 2: Parse scenes

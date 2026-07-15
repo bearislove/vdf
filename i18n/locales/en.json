@@ -92,7 +92,25 @@
     "enrichStep2": "Step 2/3 — Analyze scenes",
     "enrichStep3": "Step 3/3 — Extract characters & objects",
     "noVideo": "Episode has no video",
-    "deleteConfirm": "Delete this episode?"
+    "deleteConfirm": "Delete this episode?",
+    "fileTypeError": "Only .md and .txt files are supported",
+    "aiPreviewOption": "Analyze with AI and review before creating",
+    "analyzePreview": "Analyze and preview",
+    "analyzingPreview": "Analyzing...",
+    "previewTitle": "Review episode content",
+    "plotPreview": "Story",
+    "charactersAndLocations": "Characters and locations",
+    "storyElements": "elements",
+    "description": "Description",
+    "scenePreview": "Scene list",
+    "sceneTitle": "Scene title",
+    "scenePrompt": "Scene description",
+    "revisionPlaceholder": "Ask AI for a rewrite, e.g. make the ending more dramatic...",
+    "regenerate": "Regenerate",
+    "regenerating": "Regenerating...",
+    "confirmCreate": "Confirm and create",
+    "importing": "Creating episode...",
+    "createdSuccess": "Episode and content created"
   },
   "canvas": {
     "objects": "Objects — drag into scene",
@@ -101,6 +119,7 @@
     "dragHint": "Drag objects from the left panel into a scene",
     "scene": "Scene",
     "generate": "Generate Video",
+    "generatingVideo": "Generating video...",
     "addVariant": "Generate New Variant",
     "variants": "Video Variants",
     "selectMain": "Set as Main",
@@ -108,10 +127,33 @@
     "sceneNumber": "Scene {n}",
     "addToScene": "+ Add to scene",
     "charactersAndObjects": "Characters & Objects",
-    "mode": {
-      "simple": "Simple",
-      "pro": "Pro"
-    }
+    "initialReferenceImage": "Initial reference image",
+    "createInitialImage": "Create reference image",
+    "initialImageDialogTitle": "Create initial reference image",
+    "referenceSource": "Reference source",
+    "sourceObjects": "Objects in this scene",
+    "sourcePreviousScene": "Previous scene's last frame",
+    "sourceUpload": "Upload an image",
+    "sourceUploadMeta": "JPG, PNG, or WEBP",
+    "imageEditPrompt": "Describe the target image",
+    "imageEditPromptPlaceholder": "E.g. Keep the face, outfit, and pose unchanged; replace the background with a city at night using cinematic lighting...",
+    "imageEditPromptHint": "State what should change and what must remain unchanged, then describe the style, lighting, and composition.",
+    "availableImages": "{count} images available",
+    "noObjectImages": "No object reference images",
+    "noPreviousFrame": "No previous frame available",
+    "preparingInitialImage": "Preparing reference images...",
+    "generatingInitialImage": "Generating reference image...",
+    "generateInitialImage": "Generate image",
+    "initialImageGenerated": "Initial reference image created",
+    "noGenerationResponse": "Image provider returned no result",
+    "referenceImageCount": "{count} images",
+    "generateAnotherImage": "Generate another image",
+    "uploadReferenceImageHint": "Click or drop JPG, PNG, WEBP · max 15 MB each",
+    "referenceImageUploaded": "{count} reference images uploaded",
+    "selectForVideo": "Use for video",
+    "selectedForVideo": "Used for video",
+    "referenceImageSelected": "Reference image selected",
+    "noGeneratedReferenceImages": "No reference images"
   },
   "object": {
     "types": {
@@ -120,11 +162,11 @@
       "environment": "Environment"
     },
     "refImages": "Reference Images",
+    "aiGeneratedImages": "AI Generated",
     "mainImage": "Main Image",
     "setMain": "Set as Main",
     "uploadImages": "Drop images here",
     "generateImage": "Generate image from description",
-    "voiceRef": "Voice Reference",
     "appearsIn": "Appears in",
     "noImages": "No images yet",
     "imageHint": "Include front, side, 3/4 view images",
@@ -136,47 +178,32 @@
     "sendingToComfyUI": "Sending to ComfyUI...",
     "imageGenerated": "Image generated successfully",
     "generateFailed": "Generation failed",
-    "voiceUploaded": "Voice reference uploaded",
-    "deleteVoiceRef": "Delete voice reference",
-    "uploadVoiceRef": "Upload voice reference · WAV MP3",
     "mainBadge": "Main",
-    "setAsMain": "Set as Main"
+    "setAsMain": "Set as Main",
+    "details": "Details",
+    "images": "images",
+    "referencesTab": "References",
+    "generatedTab": "AI generated"
   },
   "video": {
     "main": "Main Video",
-    "queuedMessage": "Added to generation queue"
+    "queuedMessage": "Added to generation queue",
+    "generationFailed": "Video generation failed",
+    "unknownError": "The provider did not return an error message.",
+    "recheck": "Re-check",
+    "showFullError": "Show full error",
+    "hideError": "Collapse error",
+    "referenceImageUsed": "Reference image used for this video"
   },
   "params": {
     "description": "Scene description",
-    "duration": "Duration",
-    "quality": "Quality",
-    "qualityOptions": {
-      "fast": "Fast (draft)",
-      "balanced": "Balanced",
-      "high": "High quality"
-    },
-    "seed": "Seed",
-    "cfgScale": "CFG Scale",
-    "steps": "Steps",
-    "sampler": "Sampler",
-    "scheduler": "Scheduler",
-    "denoise": "Denoise",
-    "guidance": "Flux Guidance",
-    "resolution": "Resolution",
-    "batchSize": "Batch Size",
-    "lora": "LoRA",
-    "controlnet": "ControlNet",
-    "precision": "Precision",
-    "chainFromPrev": "Chain from previous scene",
-    "strategy": "Strategy",
-    "autoDetect": "Auto detect",
-    "videoModelOverride": "Video model (override)",
-    "videoModelPlaceholder": "Leave empty = use default"
+    "duration": "Duration"
   },
   "settings": {
     "title": "Settings",
     "sections": {
       "comfyui": "ComfyUI",
+      "agnes": "Agnes AI",
       "models": "Models",
       "ai": "AI Provider",
       "storage": "Storage",
@@ -185,6 +212,17 @@
     "comfyui": {
       "url": "Server URL",
       "timeout": "Timeout (seconds)",
+      "test": "Test",
+      "connected": "Connected",
+      "disconnected": "Disconnected"
+    },
+    "agnes": {
+      "apiKeyWarning": "API key is read from AGNES_AI_API_KEY in .env — not saved through this UI.",
+      "imageProvider": "Image provider (default)",
+      "videoProvider": "Video provider (default)",
+      "imageModel": "Image model",
+      "videoModel": "Video model",
+      "modelHint": "You can pick a different provider per Scene/Object — this is just the initial default.",
       "test": "Test",
       "connected": "Connected",
       "disconnected": "Disconnected"
@@ -217,25 +255,12 @@
       "fileServeInfo": "Files are served via /api/files/[...path] — paths are not exposed directly."
     },
     "about": {
-      "version": "StoryForge v1.0.0",
+      "version": "VDF v1.0.0",
       "description": "AI Video Production App.",
       "techStack": "Create films from text stories with ComfyUI + LTX Video / Wan2.2 / SVD."
     }
   },
   "generation": {
-    "strategy": {
-      "t2v": "Text-to-Video",
-      "i2v_single": "Image-to-Video (1 character)",
-      "i2v_composite": "FLUX2 composite + I2V (2+ characters)",
-      "ic_lora": "IC-LoRA"
-    },
-    "warnings": {
-      "twoCharacters": "2 characters → FLUX2 composite + LTX I2V",
-      "threeCharacters": "3+ characters reduces quality — consider Wan2.2",
-      "closeUp": "Close-up shots work better with Wan2.2",
-      "longScene": "Scenes longer than 4s may flicker",
-      "noImage": "Add images to improve consistency",
-      "comfyOffline": "ComfyUI is not connected"
-    }
+    "provider": "Provider"
   }
 }

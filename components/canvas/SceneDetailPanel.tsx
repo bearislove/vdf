@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { IconLoader2, IconPlayerPlay } from "@tabler/icons-react";
 import { useAppStore } from "@/store/useAppStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useMode } from "@/hooks/useMode";
 import { apiPut, apiPost } from "@/lib/utils/api";
 import { ParamsSimple, durationToFrames, type SimpleParams } from "./ParamsSimple";
-import { ParamsPro } from "./ParamsPro";
 import { VariantList } from "./VariantList";
-import { QUALITY_STEPS, LTX_VIDEO_DEFAULTS } from "@/lib/comfyui/defaults";
+import { InitialImageManager } from "./InitialImageManager";
+import { GenerationProviderSelect } from "@/components/ui/GenerationProviderSelect";
+import { DetailPanelHeader } from "@/components/ui/DetailPanelHeader";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import type { GenerationProviderName } from "@/lib/providers/types";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
@@ -21,24 +25,22 @@ interface SceneWithLinks extends Omit<Scene, "objectLinks"> {
 
 interface Props {
   scene: SceneWithLinks;
+  previousScene?: SceneWithLinks;
   objects?: StoryObject[];
   onUpdate: () => void;
 }
 
-export function SceneDetailPanel({ scene, onUpdate }: Props) {
+export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
-  const { isPro } = useMode();
+  const { selectScene } = useCanvasStore();
+  const defaultVideoProvider = useSettingsStore((s) => s.videoProvider);
+  const [genProvider, setGenProvider] = useState<GenerationProviderName>(defaultVideoProvider);
   const [simpleParams, setSimpleParams] = useState<SimpleParams>({
     promptEn: scene.promptEnOverride ?? scene.promptEn,
-    quality: "balanced",
     duration: "4",
-    seed: "-1",
     aspectRatio: "16:9",
-    firstFrameStrength: LTX_VIDEO_DEFAULTS.firstFrameStrength,
-    lastFrameStrength: LTX_VIDEO_DEFAULTS.lastFrameStrength,
   });
-  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [isSvdModel, setIsSvdModel] = useState(false);
 
@@ -47,9 +49,7 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
   }, []);
 
   const prompt = simpleParams.promptEn;
-  const quality = simpleParams.quality;
   const duration = simpleParams.duration;
-  const seed = simpleParams.seed;
 
   useEffect(() => {
     setSimpleParams((p) => ({
@@ -58,49 +58,21 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
     }));
   }, [scene.id, scene.promptEn, scene.promptEnOverride]);
 
-  const charCount =
-    scene.objectLinks?.filter((l) => l.object?.type === "CHARACTER").length ?? 0;
-
-  const warnings: string[] = [];
-  if (charCount === 2) warnings.push(t("generation.warnings.twoCharacters"));
-  if (charCount >= 3) warnings.push(t("generation.warnings.threeCharacters"));
-  if (scene.shotType === "CLOSE") warnings.push(t("generation.warnings.closeUp"));
-  if (parseInt(duration) > 4) warnings.push(t("generation.warnings.longScene"));
-  const missingImages = scene.objectLinks?.some(
-    (l) => l.object?.type === "CHARACTER" && !l.object.refImages?.length
-  );
-  if (missingImages) warnings.push(t("generation.warnings.noImage"));
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      await apiPut(`/api/scenes/${scene.id}`, {
-        promptEnOverride: prompt !== scene.promptEn ? prompt : null,
-      });
-      onUpdate();
-    } catch {
-      addToast("error", t("common.error"));
-    } finally {
-      setSaving(false);
-    }
-  }, [scene.id, scene.promptEn, prompt, onUpdate, addToast, t]);
+  const hasActiveVideo = scene.videoVariants?.some((variant) =>
+    ["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"].includes(variant.status)
+  ) ?? false;
+  const isVideoGenerating = generating || hasActiveVideo;
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
     try {
-      const preset = QUALITY_STEPS[quality] ?? QUALITY_STEPS.balanced;
       await apiPost("/api/videos", {
         sceneId: scene.id,
+        provider: genProvider,
         params: {
           promptEn: prompt,
           numFrames: durationToFrames(duration),
-          seed: parseInt(seed) || -1,
-          qualityPreset: quality,
-          steps: preset.steps,
-          guidance: preset.guidance,
           aspectRatio: simpleParams.aspectRatio,
-          firstFrameStrength: simpleParams.firstFrameStrength,
-          lastFrameStrength: simpleParams.lastFrameStrength,
         },
       });
       addToast("info", t("video.queuedMessage"));
@@ -110,7 +82,7 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
     } finally {
       setGenerating(false);
     }
-  }, [scene.id, prompt, quality, duration, seed, onUpdate, addToast]);
+  }, [scene.id, prompt, duration, simpleParams.aspectRatio, genProvider, onUpdate, addToast, t]);
 
   const handleSelectVariant = async (variantId: string) => {
     await apiPut(`/api/scenes/${scene.id}`, { selectedVideoId: variantId });
@@ -127,31 +99,14 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
     onUpdate();
   };
 
-  const handleRemoveObject = async (linkId: string) => {
-    await fetch(`/api/scenes/${scene.id}/links/${linkId}`, { method: "DELETE" });
-    onUpdate();
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      {/* Header */}
-      <div
-        style={{
-          padding: "12px 14px",
-          borderBottom: "0.5px solid var(--border)",
-          flexShrink: 0,
-        }}
-      >
-        <span className="pill pill-done" style={{ marginBottom: 6 }}>
-          {t("canvas.selectedScene")}
-        </span>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text1)", marginTop: 4 }}>
-          {scene.title || t("canvas.sceneNumber", { n: String(scene.order + 1) })}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--text2)" }}>
-          {scene.shotType} · {scene.mood}
-        </div>
-      </div>
+      <DetailPanelHeader
+        title={scene.title || t("canvas.sceneNumber", { n: String(scene.order + 1) })}
+        meta={`${scene.shotType} · ${scene.mood}`}
+        closeLabel={t("common.close")}
+        onClose={() => selectScene(null)}
+      />
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
@@ -172,13 +127,6 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
           </div>
         )}
 
-        {/* Warnings */}
-        {warnings.map((w, i) => (
-          <div key={i} className="warning-box">
-            ⚠ {w}
-          </div>
-        ))}
-
         {/* Prompt */}
         <label className="form-label">{t("params.description")}</label>
         <textarea
@@ -188,52 +136,6 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
           style={{ resize: "vertical", marginBottom: 10 }}
         />
 
-        {/* Characters */}
-        {(scene.objectLinks?.length ?? 0) > 0 && (
-          <div style={{ marginBottom: 10 }}>
-            <label className="form-label">{t("canvas.charactersAndObjects")}</label>
-            {scene.objectLinks?.map((link) => (
-              <div
-                key={link.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  marginBottom: 4,
-                  fontSize: 11,
-                  color: "var(--text1)",
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background:
-                      link.role === "main" ? "var(--accent)" : "var(--border2)",
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ flex: 1 }}>{link.object?.name}</span>
-                <button
-                  onClick={() => handleRemoveObject(link.id)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--text3)",
-                    cursor: "pointer",
-                    fontSize: 10,
-                    padding: 0,
-                    width: "auto",
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         <div className="divider" />
 
         <ParamsSimple
@@ -241,26 +143,53 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
           onChange={(partial) => setSimpleParams((p) => ({ ...p, ...partial }))}
         />
 
-        {isPro && (
-          <>
-            <div className="divider" />
-            <ParamsPro scene={scene as Scene} onUpdate={onUpdate} />
-          </>
-        )}
+        <div className="divider" />
+
+        <InitialImageManager
+          scene={scene as Parameters<typeof InitialImageManager>[0]["scene"]}
+          previousScene={previousScene as Parameters<typeof InitialImageManager>[0]["previousScene"]}
+          prompt={prompt}
+          aspectRatio={simpleParams.aspectRatio}
+          disabled={isVideoGenerating}
+          onSceneUpdate={onUpdate}
+        />
 
         <div className="divider" />
 
-        {/* Actions */}
-        <button
-          className="rp-btn p"
-          onClick={handleGenerate}
-          disabled={generating}
-        >
-          {generating ? `⟳ ${t("common.processing")}` : "▶ " + t("canvas.generate")}
-        </button>
-        <button className="rp-btn" onClick={handleSave} disabled={saving}>
-          {saving ? t("common.processing") : t("common.save")}
-        </button>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 7, marginBottom: 10 }}>
+          <label style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 10, color: "var(--text2)", flexShrink: 0 }}>
+              {t("generation.provider")}
+            </span>
+            <GenerationProviderSelect
+              value={genProvider}
+              onChange={setGenProvider}
+              style={{ minWidth: 0, flex: 1, height: 34 }}
+              disabled={isVideoGenerating}
+              ariaLabel={t("generation.provider")}
+            />
+          </label>
+
+          <button
+            className="rp-btn p"
+            onClick={handleGenerate}
+            disabled={isVideoGenerating}
+            aria-busy={isVideoGenerating}
+            style={{ width: "auto", minHeight: 34, marginBottom: 0, padding: "7px 11px", flexShrink: 0 }}
+          >
+            {isVideoGenerating ? (
+              <>
+                <IconLoader2 size={15} stroke={2} className="loading-spinner" aria-hidden="true" />
+                {t("canvas.generatingVideo")}
+              </>
+            ) : (
+              <>
+                <IconPlayerPlay size={14} fill="currentColor" aria-hidden="true" />
+                {t("canvas.generate")}
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Variants */}
         {(scene.videoVariants?.length ?? 0) > 0 && (
@@ -277,7 +206,7 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
           </>
         )}
       </div>
+
     </div>
   );
 }
-

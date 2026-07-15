@@ -36,6 +36,7 @@ StoryForge là web app giúp người dùng tạo phim từ cốt chuyện văn 
 ```yaml
 services:
   app:
+    container_name: vdf_app
     build: .
     ports: ["3000:3000"]
     env_file: .env
@@ -45,6 +46,7 @@ services:
       - ${COMFYUI_OUTPUT_PATH}:/comfyui-output:ro
 
   db:
+    container_name: vdf_db
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: storyforge

@@ -57,12 +57,6 @@ export const FLUX2_DEFAULTS = {
   scheduler: "normal",
 };
 
-export const QUALITY_STEPS: Record<string, { steps: number; guidance: number }> = {
-  fast:     { steps: 15, guidance: 3.0 },
-  balanced: { steps: 25, guidance: 3.5 },
-  high:     { steps: 40, guidance: 3.5 },
-};
-
 export const ASPECT_RATIOS: Record<string, { width: number; height: number }> = {
   "1:1":  { width: 1024, height: 1024 },
   "2:3":  { width: 768,  height: 1152 },

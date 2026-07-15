@@ -2,12 +2,18 @@ version: '3.9'
 
 services:
   app:
+    container_name: app_${CONTAINER_NAME}
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://storyforge:storyforge@db:5432/storyforge
+      - AI_BASE_URL=http://host.docker.internal:20128/v1
+      - COMFYUI_URL=http://host.docker.internal:8188
+      - COMFYUI_WS_URL=ws://host.docker.internal:8188/ws
     depends_on:
       db:
         condition: service_healthy
@@ -17,6 +23,7 @@ services:
       - ./storage:/app/storage
 
   db:
+    container_name: db_${CONTAINER_NAME}
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: storyforge

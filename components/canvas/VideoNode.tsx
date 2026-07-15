@@ -2,6 +2,7 @@
 
 import { memo, useState, useEffect, useRef } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
+import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
 import type { VideoVariant } from "@/types/video";
 
 export interface VideoNodeData {
@@ -199,67 +200,13 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
 
       {/* Fullscreen modal */}
       {showModal && videoSrc && (
-        <VideoModal
-          src={`/api/files/${videoSrc}`}
-          isWebP={!!isWebP}
+        <MediaPreviewModal
+          videoPath={videoSrc}
+          alt={sceneTitle}
           onClose={() => setShowModal(false)}
+          zIndex={1000}
         />
       )}
     </>
   );
 });
-
-function VideoModal({
-  src, isWebP, onClose,
-}: {
-  src: string;
-  isWebP: boolean;
-  onClose: () => void;
-}) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.92)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 1000,
-      }}
-    >
-      <div onClick={(e) => e.stopPropagation()} style={{ position: "relative" }}>
-        <button
-          onClick={onClose}
-          style={{
-            position: "absolute", top: -32, right: 0,
-            background: "rgba(255,255,255,0.1)", border: "none",
-            color: "#fff", cursor: "pointer",
-            padding: "4px 10px", borderRadius: 4, fontSize: 11,
-          }}
-        >
-          ✕ Đóng (ESC)
-        </button>
-        {isWebP ? (
-          <img
-            src={src}
-            alt="video preview"
-            style={{ maxWidth: "85vw", maxHeight: "85vh", borderRadius: 6 }}
-          />
-        ) : (
-          <video
-            src={src}
-            controls
-            autoPlay
-            loop
-            style={{ maxWidth: "85vw", maxHeight: "85vh", borderRadius: 6 }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}

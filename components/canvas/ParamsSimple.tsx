@@ -4,12 +4,8 @@ import { useTranslation } from "@/hooks/useTranslation";
 
 export interface SimpleParams {
   promptEn: string;
-  quality: "fast" | "balanced" | "high";
   duration: string;
-  seed: string;
   aspectRatio: string;
-  firstFrameStrength: number;
-  lastFrameStrength: number;
 }
 
 interface ParamsSimpleProps {
@@ -25,18 +21,6 @@ export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
 
   return (
     <>
-      <div style={{ marginBottom: 8 }}>
-        <label className="form-label">{t("params.quality")}</label>
-        <select
-          value={values.quality}
-          onChange={(e) => onChange({ quality: e.target.value as SimpleParams["quality"] })}
-        >
-          <option value="fast">{t("params.qualityOptions.fast")}</option>
-          <option value="balanced">{t("params.qualityOptions.balanced")}</option>
-          <option value="high">{t("params.qualityOptions.high")}</option>
-        </select>
-      </div>
-
       <div style={{ marginBottom: 8 }}>
         <label className="form-label">{t("params.duration")}</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 5 }}>
@@ -58,17 +42,18 @@ export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
               </button>
             );
           })}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <input
             type="number" min={1} max={120} step={1} value={values.duration}
             onChange={(e) => { const v = e.target.value; if (v === "" || parseInt(v, 10) > 0) onChange({ duration: v }); }}
             style={{ flex: 1 }}
           />
           <span style={{ fontSize: 11, color: "var(--text3)", flexShrink: 0 }}>
-            giây · {durationToFrames(values.duration)} frames
+            s
           </span>
         </div>
+        </div>
+
       </div>
 
       <div style={{ marginBottom: 8 }}>
@@ -95,40 +80,6 @@ export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
         </div>
       </div>
 
-      <div style={{ marginBottom: 8 }}>
-        <label className="form-label">{t("params.seed")}</label>
-        <input
-          value={values.seed}
-          onChange={(e) => onChange({ seed: e.target.value })}
-          placeholder="-1 (random)"
-        />
-      </div>
-
-      <div style={{ marginBottom: 8 }}>
-        <label className="form-label">
-          First Frame Strength
-          <span style={{ float: "right", color: "var(--text3)" }}>{values.firstFrameStrength.toFixed(2)}</span>
-        </label>
-        <input
-          type="range" min={0.5} max={1.0} step={0.05}
-          value={values.firstFrameStrength}
-          onChange={(e) => onChange({ firstFrameStrength: parseFloat(e.target.value) })}
-          style={{ width: "100%" }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <label className="form-label">
-          Last Frame Strength
-          <span style={{ float: "right", color: "var(--text3)" }}>{values.lastFrameStrength.toFixed(2)}</span>
-        </label>
-        <input
-          type="range" min={0.3} max={1.0} step={0.05}
-          value={values.lastFrameStrength}
-          onChange={(e) => onChange({ lastFrameStrength: parseFloat(e.target.value) })}
-          style={{ width: "100%" }}
-        />
-      </div>
     </>
   );
 }

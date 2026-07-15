@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -44,6 +45,8 @@ enum JobType {
   LTX_VIDEO
   WAN_VIDEO
   EXTRACT_LAST_FRAME
+  AGNES_IMAGE
+  AGNES_VIDEO
 }
 
 enum JobStatus {
@@ -54,11 +57,10 @@ enum JobStatus {
   CANCELLED
 }
 
-enum GenerationStrategy {
-  T2V
-  I2V_SINGLE
-  I2V_COMPOSITE
-  IC_LORA
+// AD-16: provider-agnostic generation backend (ComfyUI self-hosted vs Agnes AI hosted API)
+enum GenerationProvider {
+  COMFYUI
+  AGNES
 }
 
 model Film {
@@ -131,10 +133,8 @@ model Scene {
   compositeImagePath   String?             @map("composite_image_path")
   selectedVideoId      String?             @map("selected_video_id")
   selectedVideo        VideoVariant?       @relation("SelectedVideo", fields: [selectedVideoId], references: [id], onDelete: SetNull)
-  videoModel           String              @default("") @map("video_model")
   videoParams          Json                @default("{}") @map("video_params")
   useLastFrameChaining Boolean             @default(true) @map("use_last_frame_chaining")
-  strategyOverride     GenerationStrategy? @map("strategy_override")
   canvasX              Float               @default(0) @map("canvas_x")
   canvasY              Float               @default(0) @map("canvas_y")
   createdAt            DateTime            @default(now()) @map("created_at")
@@ -168,6 +168,8 @@ model VideoVariant {
   workflowSnapshot   Json            @default("{}") @map("workflow_snapshot")
   comfyPromptId      String?         @map("comfy_prompt_id")
   comfyClientId      String?         @map("comfy_client_id")
+  provider           GenerationProvider @default(AGNES)
+  externalJobId      String?         @map("external_job_id")
   status             VideoStatus     @default(QUEUED)
   statusMessage      String          @default("") @map("status_message")
   errorDetail        String?         @map("error_detail")
@@ -199,9 +201,11 @@ model GenerationJob {
   objectId       String?       @map("object_id")
   variantId      String?       @map("variant_id")
   jobType        JobType       @map("job_type")
+  provider       GenerationProvider @default(AGNES)
   comfyPromptId  String?       @map("comfy_prompt_id")
   comfyClientId  String?       @map("comfy_client_id")
-  comfyServerUrl String        @map("comfy_server_url")
+  comfyServerUrl String?       @map("comfy_server_url")
+  externalJobId  String?       @map("external_job_id")
   status         JobStatus     @default(QUEUED)
   currentNode    String?       @map("current_node")
   progressStep   Int           @default(0) @map("progress_step")

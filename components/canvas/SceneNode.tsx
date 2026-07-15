@@ -60,12 +60,17 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
 
   const latestVariant = scene.videoVariants?.[scene.videoVariants.length - 1];
   const selectedVariant = scene.selectedVideo;
-  const displayVariant = selectedVariant ?? latestVariant;
+  const activeVariant = [...(scene.videoVariants ?? [])].reverse().find((variant) =>
+    ["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"].includes(variant.status)
+  );
+  const displayVariant = activeVariant ?? selectedVariant ?? latestVariant;
 
   const isDone = displayVariant?.status === "DONE";
   const coverImg = displayVariant?.lastFramePath || displayVariant?.thumbnailPath ||
     (displayVariant?.videoPath?.endsWith(".webp") ? displayVariant.videoPath : null);
+  const initialImage = scene.compositeImagePath;
   const isGenerating =
+    displayVariant?.status === "QUEUED" ||
     displayVariant?.status === "GENERATING_IMAGE" ||
     displayVariant?.status === "GENERATING_VIDEO";
   const isFailed = displayVariant?.status === "FAILED";
@@ -203,6 +208,12 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
           </>
         ) : isFailed ? (
           <span style={{ fontSize: 18, color: "var(--red)" }}>✕</span>
+        ) : initialImage ? (
+          <img
+            src={`/api/files/${initialImage}`}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : (
           <span style={{ fontSize: 18, color: "var(--text3)" }}>🖼</span>
         )}

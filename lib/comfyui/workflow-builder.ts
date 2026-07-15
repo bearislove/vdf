@@ -1,6 +1,6 @@
 import path from "path";
 import { STORAGE_ROOT } from "@/lib/storage";
-import { chooseStrategy } from "./strategy";
+import { buildPrompt } from "./prompt";
 import { buildLTXT2VWorkflow } from "./workflows/ltx-t2v";
 import { buildLTXI2VWorkflow } from "./workflows/ltx-i2v";
 import { buildSVDWorkflow } from "./workflows/svd";
@@ -9,7 +9,6 @@ import {
   LTX_VIDEO_DEFAULTS,
   WAN_DEFAULTS,
   SVD_DEFAULTS,
-  QUALITY_STEPS,
   ASPECT_RATIOS,
   WAN_SAMPLER_DEFAULTS,
 } from "./defaults";
@@ -32,21 +31,10 @@ export interface BuildWorkflowParams {
   scene: Scene & {
     objectLinks?: Array<{ role: string; strengthHint?: number; object: StoryObject }>;
   };
-  objects: StoryObject[];
   variantId: string;
-  filmId: string;
-  episodeId: string;
+  firstFrameImagePath?: string;
   videoParams: Record<string, unknown>;
   previousVariant?: VideoVariant | null;
-}
-
-/** Build enriched prompt by appending linked object descriptions if not already present */
-function buildPrompt(basePrompt: string | null | undefined, objectLinks: BuildWorkflowParams["scene"]["objectLinks"]): string {
-  const base = (basePrompt ?? "").trim();
-  const descs = (objectLinks ?? [])
-    .map((l) => l.object?.descriptionEn?.trim())
-    .filter((d): d is string => !!d && !base.includes(d));
-  return descs.length > 0 ? `${base}. ${descs.join(", ")}` : base;
 }
 
 /** Resolve video dimensions from params → scene → aspect ratio → model defaults */
@@ -67,15 +55,10 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
   strategy: string;
   uploadedImages: string[];
 }> {
-  const { scene, objects, videoParams, previousVariant } = params;
-  const strategy = chooseStrategy(scene, objects);
-
-  const qualityPreset = (videoParams.qualityPreset as string) ?? "balanced";
-  const quality = QUALITY_STEPS[qualityPreset] ?? QUALITY_STEPS.balanced;
+  const { scene, videoParams, previousVariant } = params;
 
   const videoModel =
     (videoParams.videoModel as string) ||
-    scene.videoModel ||
     process.env.DEFAULT_VIDEO_MODEL ||
     "svd_xt.safetensors";
 
@@ -85,26 +68,18 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
   );
 
   const seed = (videoParams.seed as number) ?? -1;
-  const steps = (videoParams.steps as number) ?? quality.steps;
-  const cfg = (videoParams.cfg as number) ?? (videoParams.guidance as number) ?? LTX_VIDEO_DEFAULTS.cfg;
   const firstFrameStrength = (videoParams.firstFrameStrength as number) ?? LTX_VIDEO_DEFAULTS.firstFrameStrength;
   const lastFrameStrength  = (videoParams.lastFrameStrength  as number) ?? LTX_VIDEO_DEFAULTS.lastFrameStrength;
 
   const uploadedImages: string[] = [];
 
-  // Primary character ref image (CHARACTER with isMain ref or first ref)
-  const characters = (scene.objectLinks ?? [])
-    .filter((l) => l.object?.type === "CHARACTER" && l.object != null);
-
-  let firstFrameImage = "";
-  if (characters.length > 0) {
-    const mainChar = characters[0].object!;
-    const mainImg = mainChar.refImages?.find((i) => i.isMain) ?? mainChar.refImages?.[0];
-    if (mainImg?.path) {
-      firstFrameImage = path.basename(mainImg.path);
-      uploadedImages.push(path.resolve(STORAGE_ROOT, mainImg.path));
-    }
+  const firstFrameImage = params.firstFrameImagePath
+    ? path.basename(params.firstFrameImagePath)
+    : "";
+  if (params.firstFrameImagePath) {
+    uploadedImages.push(params.firstFrameImagePath);
   }
+  const strategy = firstFrameImage ? "I2V_SINGLE" : "T2V";
 
   // Last frame from previous scene for chaining
   let lastFrameImage: string | undefined;
@@ -132,8 +107,8 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
         numFrames,
         fps,
         seed,
-        steps,
-        cfg: (videoParams.cfg as number) ?? (videoParams.guidance as number) ?? WAN_DEFAULTS.cfg,
+        steps: (videoParams.steps as number) ?? WAN_DEFAULTS.steps,
+        cfg: (videoParams.cfg as number) ?? WAN_DEFAULTS.cfg,
         initImageFilename: firstFrameImage || undefined,
         lastFrameFilename: lastFrameImage,
         filenamePrefix: params.variantId,
@@ -163,7 +138,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
         motionBucketId: (videoParams.motionBucketId as number) ?? SVD_DEFAULTS.motionBucketId,
         fps: (videoParams.fps as number) ?? SVD_DEFAULTS.fps,
         seed,
-        steps,
+        steps: (videoParams.steps as number) ?? SVD_DEFAULTS.steps,
         cfg: SVD_DEFAULTS.cfg,
         augmentationLevel: SVD_DEFAULTS.augmentationLevel,
         filenamePrefix: params.variantId,
@@ -193,8 +168,8 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
           numFrames,
           fps,
           seed,
-          steps,
-          cfg,
+          steps: (videoParams.steps as number) ?? LTX_VIDEO_DEFAULTS.steps,
+          cfg: (videoParams.cfg as number) ?? LTX_VIDEO_DEFAULTS.cfg,
           videoModel,
           t5Model,
           filenamePrefix: params.variantId,
@@ -213,8 +188,8 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
         numFrames,
         fps,
         seed,
-        steps,
-        cfg,
+        steps: (videoParams.steps as number) ?? LTX_VIDEO_DEFAULTS.steps,
+        cfg: (videoParams.cfg as number) ?? LTX_VIDEO_DEFAULTS.cfg,
         videoModel,
         t5Model,
         firstFrameImage,
@@ -241,7 +216,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
       motionBucketId: SVD_DEFAULTS.motionBucketId,
       fps: SVD_DEFAULTS.fps,
       seed,
-      steps,
+      steps: (videoParams.steps as number) ?? SVD_DEFAULTS.steps,
       cfg: SVD_DEFAULTS.cfg,
       augmentationLevel: SVD_DEFAULTS.augmentationLevel,
       filenamePrefix: params.variantId,

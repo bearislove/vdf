@@ -6,13 +6,16 @@ import { SettingsNav } from "@/components/settings/SettingsNav";
 import { ComfyUISettings } from "@/components/settings/ComfyUISettings";
 import { ModelsSettings } from "@/components/settings/ModelsSettings";
 import { AIProviderSettings } from "@/components/settings/AIProviderSettings";
+import { AgnesAISettings } from "@/components/settings/AgnesAISettings";
 import { StorageSettings } from "@/components/settings/StorageSettings";
+import { SettingsSection } from "@/components/settings/SettingsSection";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModels } from "@/hooks/useModels";
 import { useComfyUIStatus } from "@/hooks/useComfyUIStatus";
 
 const NAV_KEYS = [
   { key: "comfyui", sectionKey: "settings.sections.comfyui", icon: "⚙" },
+  { key: "agnes",   sectionKey: "settings.sections.agnes",   icon: "◆" },
   { key: "models",  sectionKey: "settings.sections.models",  icon: "🤖" },
   { key: "ai",      sectionKey: "settings.sections.ai",      icon: "✨" },
   { key: "storage", sectionKey: "settings.sections.storage", icon: "💾" },
@@ -47,20 +50,13 @@ export default function SettingsPage() {
           }}
         >
           {active === "comfyui" && <ComfyUISettings status={comfyStatus} />}
+          {active === "agnes"   && <AgnesAISettings />}
           {active === "models"  && <ModelsSettings models={models} loading={modelsLoading} onReload={reloadModels} />}
           {active === "ai"      && <AIProviderSettings />}
           {active === "storage" && <StorageSettings />}
 
           {active === "about" && (
-            <div>
-              <div
-                style={{
-                  fontSize: 11, fontWeight: 500, color: "var(--text1)",
-                  paddingBottom: 6, borderBottom: "0.5px solid var(--border)", marginBottom: 9,
-                }}
-              >
-                {t("settings.sections.about")}
-              </div>
+            <SettingsSection title={t("settings.sections.about")}>
               <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text1)", marginBottom: 6 }}>
                 {t("settings.about.version")}
               </p>
@@ -74,7 +70,7 @@ export default function SettingsPage() {
                 <div>Canvas: React Flow</div>
                 <div>State: Zustand</div>
               </div>
-            </div>
+            </SettingsSection>
           )}
         </div>
       </main>
