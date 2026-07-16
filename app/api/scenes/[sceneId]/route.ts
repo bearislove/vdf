@@ -27,6 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: { sceneId: str
       title: body.title,
       promptEn: body.promptEn,
       promptEnOverride: body.promptEnOverride,
+      targetImagePrompt: body.targetImagePrompt,
       negativePrompt: body.negativePrompt,
       cameraDirection: body.cameraDirection,
       shotType: body.shotType,

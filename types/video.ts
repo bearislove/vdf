@@ -10,6 +10,7 @@ export interface VideoVariant {
   comfyClientId: string | null;
   provider: GenerationProvider;
   externalJobId: string | null;
+  providerCredentialId: string | null;
   status: VideoStatus;
   statusMessage: string;
   errorDetail: string | null;

@@ -32,6 +32,7 @@ export async function importEnrichment(
         order: index,
         title: scene.title,
         promptEn: scene.prompt_en,
+        targetImagePrompt: scene.prompt_en,
         negativePrompt: scene.negative_prompt,
         cameraDirection: scene.camera_direction,
         shotType: scene.shot_type.toUpperCase() as

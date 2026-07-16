@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { episodeId, title, promptEn, negativePrompt, order, canvasX, canvasY, connectPrevious } = await req.json();
+  const { episodeId, title, promptEn, targetImagePrompt, negativePrompt, order, canvasX, canvasY, connectPrevious } = await req.json();
   if (!episodeId) return NextResponse.json({ error: "episodeId required" }, { status: 400 });
 
   const scene = await prisma.$transaction(async (tx) => {
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
         episodeId,
         title: title?.trim() ?? "",
         promptEn: promptEn?.trim() ?? "",
+        targetImagePrompt: targetImagePrompt?.trim() ?? promptEn?.trim() ?? "",
         negativePrompt: negativePrompt?.trim() ?? "",
         order: sceneOrder,
         ...(typeof canvasX === "number" && { canvasX }),

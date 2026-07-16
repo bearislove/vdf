@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { IconDeviceFloppy, IconLoader2, IconPlayerPlay, IconSparkles, IconTextDecrease } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconLoader2, IconPlayerPlay, IconSparkles, IconTextDecrease, IconTextIncrease } from "@tabler/icons-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useTranslation } from "@/hooks/useTranslation";
 import { apiPut, apiPost } from "@/lib/utils/api";
@@ -32,7 +32,7 @@ interface Props {
 function getSavedParams(scene: SceneWithLinks): SimpleParams {
   const rawDuration = scene.videoParams?.duration;
   const rawFrames = scene.videoParams?.numFrames;
-  let duration = "4";
+  let duration = "5";
 
   if ((typeof rawDuration === "string" || typeof rawDuration === "number") && Number(rawDuration) > 0) {
     duration = String(rawDuration);
@@ -302,7 +302,7 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
             >
               {enhancingDescription
                 ? <IconLoader2 size={13} className="loading-spinner" aria-hidden="true" />
-                : <IconSparkles size={14} stroke={1.9} aria-hidden="true" />}
+                : <IconTextIncrease size={14} stroke={1.9} aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -327,7 +327,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
         <InitialImageManager
           scene={scene as Parameters<typeof InitialImageManager>[0]["scene"]}
           previousScene={previousScene as Parameters<typeof InitialImageManager>[0]["previousScene"]}
-          prompt={prompt}
           aspectRatio={simpleParams.aspectRatio}
           disabled={isVideoGenerating}
           onSceneUpdate={onUpdate}

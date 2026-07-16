@@ -62,6 +62,8 @@ export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
             type="number" min={1} max={120} step={1} value={values.duration}
             onChange={(e) => { const v = e.target.value; if (v === "" || parseInt(v, 10) > 0) onChange({ duration: v }); }}
             style={{ flex: 1 }}
+            className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+            
           />
           <span style={{ fontSize: 11, color: "var(--text3)", flexShrink: 0 }}>
             s

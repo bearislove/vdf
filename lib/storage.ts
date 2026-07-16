@@ -54,11 +54,6 @@ export function listSceneCompositeImages(
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 
-/** Ảnh mới nhất trong thư mục Initial reference image của scene (đường dẫn tuyệt đối), hoặc null nếu trống */
-export function newestSceneCompositeImage(filmId: string, episodeId: string, sceneId: string): string | null {
-  return listSceneCompositeImages(filmId, episodeId, sceneId)[0]?.absPath ?? null;
-}
-
 export function variantDir(filmId: string, episodeId: string, sceneId: string, variantId: string) {
   return path.join(sceneDir(filmId, episodeId, sceneId), "variants", variantId);
 }

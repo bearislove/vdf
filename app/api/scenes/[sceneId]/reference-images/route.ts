@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
-import { ensureCompositeImageSelected } from "@/lib/scene-composite-selection";
 import { cloneLinkedObjectReferences } from "@/lib/scene-reference-clones";
 import {
   ensureDir,
@@ -18,6 +17,14 @@ const IMAGE_MIME_EXTENSIONS: Record<string, string> = {
   "image/webp": ".webp",
 };
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+
+function imageKind(absPath: string): "generated" | "initial" | "upload" | "object" {
+  const filename = path.basename(absPath);
+  if (filename.startsWith("composite_")) return "generated";
+  if (filename.startsWith("initial_")) return "initial";
+  if (filename.startsWith("object_")) return "object";
+  return "upload";
+}
 
 function hasValidImageSignature(buffer: Buffer, mimeType: string): boolean {
   if (mimeType === "image/jpeg") {
@@ -54,6 +61,9 @@ export async function GET(
     .map(({ absPath, mtimeMs }) => ({
       path: storageRelative(absPath),
       createdAt: new Date(mtimeMs).toISOString(),
+      kind: imageKind(absPath),
+      selected: (imageKind(absPath) === "generated" || imageKind(absPath) === "initial")
+        && storageRelative(absPath) === scene.compositeImagePath,
     }));
 
   return NextResponse.json({ images });
@@ -70,6 +80,7 @@ export async function POST(
   if (req.headers.get("content-type")?.includes("multipart/form-data")) {
     const formData = await req.formData();
     const image = formData.get("image");
+    const useAsInitial = formData.get("purpose") === "initial";
     if (!image || typeof image === "string" || image.size === 0) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
@@ -87,15 +98,49 @@ export async function POST(
     }
 
     ensureDir(directory);
-    const filename = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 10)}${extension}`;
+    const filename = `${useAsInitial ? "initial" : "upload"}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}${extension}`;
     const absolutePath = path.join(directory, filename);
     fs.writeFileSync(absolutePath, buffer);
     const uploadedPath = storageRelative(absolutePath);
-    await ensureCompositeImageSelected(scene, { filmId: scene.episode.filmId, episodeId: scene.episodeId }, uploadedPath);
-    return NextResponse.json({ path: uploadedPath }, { status: 201 });
+    if (useAsInitial) {
+      await prisma.scene.update({
+        where: { id: scene.id },
+        data: { compositeImagePath: uploadedPath },
+      });
+      const previousInitialPath = resolveStoragePathInside(scene.compositeImagePath, directory);
+      if (previousInitialPath
+        && previousInitialPath !== absolutePath
+        && path.basename(previousInitialPath).startsWith("initial_")
+        && fs.existsSync(previousInitialPath)) {
+        fs.unlinkSync(previousInitialPath);
+      }
+    }
+    return NextResponse.json({ path: uploadedPath, selected: useAsInitial }, { status: 201 });
   }
 
   return NextResponse.json({ error: "Expected an image upload" }, { status: 415 });
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { sceneId: string } }
+) {
+  const scene = await getScene(params.sceneId);
+  if (!scene) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const body = await req.json().catch(() => ({}));
+  const directory = sceneCompositeImagesDir(scene.episode.filmId, scene.episodeId, scene.id);
+  const absolutePath = resolveStoragePathInside(body.path, directory);
+  if (!absolutePath || !fs.existsSync(absolutePath) || imageKind(absolutePath) !== "generated") {
+    return NextResponse.json({ error: "Generated image not found" }, { status: 404 });
+  }
+
+  const compositeImagePath = storageRelative(absolutePath);
+  await prisma.scene.update({
+    where: { id: scene.id },
+    data: { compositeImagePath },
+  });
+  return NextResponse.json({ path: compositeImagePath });
 }
 
 export async function DELETE(

@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: development
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev -- --hostname 0.0.0.0"
     ports:
       - "${APP_PORT:-3000}:3000"
     env_file: .env

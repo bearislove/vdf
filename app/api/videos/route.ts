@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomInt } from "crypto";
 import fs from "fs";
+import path from "path";
 import { prisma } from "@/lib/prisma";
-import { resolvePreviousSceneFirstFrame, resolveObjectReferenceImagePaths } from "@/lib/comfyui/prompt";
+import { resolvePreviousSceneFirstFrame } from "@/lib/comfyui/prompt";
 import {
   getVideoProvider,
   resolveVideoProviderName,
@@ -12,7 +13,7 @@ import { listSceneCompositeImages, storageRelative } from "@/lib/storage";
 import { toErrorMessage } from "@/lib/utils/errors";
 import { pickLastFrameVariant } from "@/lib/utils/scene-reference-images";
 import { finalizeVideoFile } from "@/lib/video/finalize-video-file";
-import { dedupeAbsoluteImagePaths, dedupeStorageImagePaths } from "@/lib/video/reference-image-dedup";
+import { dedupeStorageImagePaths } from "@/lib/video/reference-image-dedup";
 import type { VideoGenContext, VideoGenHooks } from "@/lib/providers/types";
 import type { Prisma } from "@prisma/client";
 
@@ -30,6 +31,9 @@ function buildVideoHooks(ids: {
           status: "GENERATING_VIDEO",
           ...(meta.strategy !== undefined && { strategy: meta.strategy }),
           ...(meta.externalJobId !== undefined && { externalJobId: meta.externalJobId }),
+          ...(meta.providerCredentialId !== undefined && {
+            providerCredentialId: meta.providerCredentialId,
+          }),
           ...(meta.comfyPromptId !== undefined && { comfyPromptId: meta.comfyPromptId }),
           ...(meta.comfyClientId !== undefined && { comfyClientId: meta.comfyClientId }),
           ...(meta.workflowSnapshot !== undefined && {
@@ -108,31 +112,27 @@ export async function POST(req: NextRequest) {
     ? resolvePreviousSceneFirstFrame(previousVariant)
     : undefined;
   const selectedInitialImage = scene.compositeImagePath
+    && ["composite_", "initial_"].some((prefix) => path.basename(scene.compositeImagePath!).startsWith(prefix))
     ? sceneReferenceImages.find(
         (image) => storageRelative(image.absPath) === scene.compositeImagePath
       )
     : undefined;
-  const firstSceneInitialImage = !prevScene
-    ? selectedInitialImage?.absPath ?? sceneReferenceImages[0]?.absPath
+  const validPreviousSceneFirstFrame = previousSceneFirstFrame && fs.existsSync(previousSceneFirstFrame)
+    ? previousSceneFirstFrame
     : undefined;
-  const resolvedFirstFrame = previousSceneFirstFrame ?? firstSceneInitialImage;
-  const firstFrameImagePath = resolvedFirstFrame && fs.existsSync(resolvedFirstFrame)
-    ? resolvedFirstFrame
+  const validCurrentSceneInitialImage = selectedInitialImage?.absPath
+    && fs.existsSync(selectedInitialImage.absPath)
+    ? selectedInitialImage.absPath
     : undefined;
-  const firstFrameSource: VideoGenContext["firstFrameSource"] = previousSceneFirstFrame
+  const inputImagePath = validCurrentSceneInitialImage;
+  const firstFrameImagePath = validPreviousSceneFirstFrame;
+  const firstFrameSource: VideoGenContext["firstFrameSource"] = firstFrameImagePath
     ? "previous_scene"
-    : firstFrameImagePath
-      ? "initial_reference"
-      : "none";
-  const referenceImagePath = firstFrameImagePath
-    ? storageRelative(firstFrameImagePath)
+    : "none";
+  const referenceImagePath = inputImagePath
+    ? storageRelative(inputImagePath)
     : null;
-  const contentReferenceImagePaths = dedupeAbsoluteImagePaths([
-    ...sceneReferenceImages.map((image) => image.absPath),
-    ...resolveObjectReferenceImagePaths(
-      scene.objectLinks as unknown as Parameters<typeof resolveObjectReferenceImagePaths>[0]
-    ),
-  ]).filter((imagePath) => imagePath !== firstFrameImagePath).slice(0, 4);
+  const contentReferenceImagePaths: string[] = [];
   const videoParams = {
     ...requestedParams,
     negativePrompt: typeof requestedParams.negativePrompt === "string"
@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
       : scene.negativePrompt,
     seed: randomInt(0, 2 ** 31),
     referenceImagePath,
+    firstFrameReferencePath: firstFrameImagePath ? storageRelative(firstFrameImagePath) : null,
     useLastFrameChaining,
   };
 
@@ -151,6 +152,7 @@ export async function POST(req: NextRequest) {
     videoParams,
     filmId,
     episodeId,
+    inputImagePath,
     firstFrameImagePath,
     firstFrameSource,
     contentReferenceImagePaths,
@@ -168,10 +170,11 @@ export async function POST(req: NextRequest) {
       compositeImagePath: referenceImagePath,
       workflowSnapshot: {},
       status: "QUEUED",
-      strategy: "t2v",
+      strategy: "i2v_single",
       provider: serializeGenerationProviderName(providerName),
       referenceImagePaths: dedupeStorageImagePaths([
         ...(referenceImagePath ? [referenceImagePath] : []),
+        ...(firstFrameImagePath ? [storageRelative(firstFrameImagePath)] : []),
         ...contentReferenceImagePaths.map((imagePath) => storageRelative(imagePath)),
       ]),
     },

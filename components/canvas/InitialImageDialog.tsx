@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { IconLoader2, IconPhotoPlus } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { IconCheck, IconFileImport, IconLoader2, IconPhotoPlus, IconTrash } from "@tabler/icons-react";
 import {
   InitialImageReferencePicker,
   type InitialImageSource,
@@ -15,30 +15,33 @@ import { useAppStore } from "@/store/useAppStore";
 import { ASPECT_RATIOS } from "@/lib/comfyui/defaults";
 import {
   deleteSceneReferenceImage,
+  importSceneReferenceImage,
+  listSceneReferenceImages,
   pickLastFrameVariant,
   uploadSceneReferenceImage,
+  type SceneReferenceImage,
 } from "@/lib/utils/scene-reference-images";
 import { consumeSSE } from "@/lib/utils/sse";
-import { apiFetch } from "@/lib/utils/api";
+import { apiFetch, apiPut } from "@/lib/utils/api";
 import type { SceneWithMedia } from "@/types/canvas";
 import type { GenerationProviderName } from "@/lib/providers/types";
 
 interface InitialImageDialogProps {
   scene: SceneWithMedia;
   previousScene?: SceneWithMedia;
-  prompt: string;
   aspectRatio: string;
   onClose: () => void;
-  onGenerated: (path: string) => void;
+  onImported: (path: string) => void;
+  onLibraryChange: () => void;
 }
 
 export function InitialImageDialog({
   scene,
   previousScene,
-  prompt: initialPrompt,
   aspectRatio,
   onClose,
-  onGenerated,
+  onImported,
+  onLibraryChange,
 }: InitialImageDialogProps) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
@@ -60,11 +63,22 @@ export function InitialImageDialog({
     const mainImages = objectOptions.filter((item) => item.isMain).map((item) => item.id);
     return (mainImages.length > 0 ? mainImages : objectOptions.map((item) => item.id)).slice(0, 4);
   });
-  const [prompt, setPrompt] = useState(initialPrompt);
+  const initialTargetImagePrompt = typeof scene.targetImagePrompt === "string"
+    ? scene.targetImagePrompt
+    : "";
+  const [prompt, setPrompt] = useState(initialTargetImagePrompt);
+  const [savedPrompt, setSavedPrompt] = useState(initialTargetImagePrompt);
   const [generating, setGenerating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [removingReferenceId, setRemovingReferenceId] = useState<string | null>(null);
+  const [removingGeneratedPath, setRemovingGeneratedPath] = useState<string | null>(null);
   const [uploadedOptions, setUploadedOptions] = useState<UploadedReferenceOption[]>([]);
+  const [generatedImages, setGeneratedImages] = useState<SceneReferenceImage[]>([]);
+  const [selectedGeneratedPath, setSelectedGeneratedPath] = useState<string | null>(
+    scene.compositeImagePath
+  );
   const [removedObjectReferenceIds, setRemovedObjectReferenceIds] = useState<string[]>([]);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
@@ -73,19 +87,64 @@ export function InitialImageDialog({
     (option) => !removedObjectReferenceIds.includes(option.id)
   );
 
-  const busy = generating || uploading || !!removingReferenceId;
+  const operationBusy = generating || importing || uploading || !!removingReferenceId || !!removingGeneratedPath;
+  const busy = operationBusy || savingPrompt;
   const canSubmit = source === "objects"
     ? selectedReferenceIds.length > 0
     : !!previousFramePath;
-  const canGenerate = canSubmit && prompt.trim().length > 0;
+  const normalizedPrompt = typeof prompt === "string" ? prompt.trim() : "";
+  const canGenerate = canSubmit && normalizedPrompt.length > 0;
+
+  const saveTargetImagePrompt = useCallback(async () => {
+    if (normalizedPrompt === savedPrompt) return;
+    await apiPut(`/api/scenes/${scene.id}`, { targetImagePrompt: normalizedPrompt });
+    setPrompt(normalizedPrompt);
+    setSavedPrompt(normalizedPrompt);
+    onLibraryChange();
+  }, [normalizedPrompt, onLibraryChange, savedPrompt, scene.id]);
+
+  const handleClose = useCallback(async () => {
+    if (operationBusy || savingPrompt) return;
+    setSavingPrompt(true);
+    setError("");
+    try {
+      await saveTargetImagePrompt();
+      onClose();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : String(saveError));
+    } finally {
+      setSavingPrompt(false);
+    }
+  }, [onClose, operationBusy, saveTargetImagePrompt, savingPrompt]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSceneReferenceImages(scene.id)
+      .then(({ images }) => {
+        if (cancelled) return;
+        setGeneratedImages(images.filter((image) => image.kind === "generated"));
+        setUploadedOptions(images
+          .filter((image) => image.kind === "upload")
+          .map((image) => ({
+            id: `upload:${image.path}`,
+            name: image.path.split("/").pop() ?? image.path,
+            path: image.path,
+          }))
+        );
+        const imported = images.find((image) => image.kind === "generated" && image.selected);
+        setSelectedGeneratedPath(imported?.path ?? null);
+      })
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : String(loadError)));
+    return () => { cancelled = true; };
+  }, [scene.id]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Escape" && !busy) void handleClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, onClose]);
+  }, [busy, handleClose]);
 
   const toggleReference = (referenceId: string) => {
     setSelectedReferenceIds((current) =>
@@ -120,7 +179,7 @@ export function InitialImageDialog({
                 .filter((item) => selectedReferenceIds.includes(item.id))
                 .map((item) => item.path)
             : undefined,
-          prompt: prompt.trim(),
+          prompt: normalizedPrompt,
           provider,
           width: dimensions.width,
           height: dimensions.height,
@@ -144,7 +203,19 @@ export function InitialImageDialog({
         } else if (event.type === "done" && event.path) {
           completed = true;
           addToast("success", t("canvas.initialImageGenerated"));
-          onGenerated(event.path);
+          const generatedImage: SceneReferenceImage = {
+            path: event.path,
+            createdAt: new Date().toISOString(),
+            kind: "generated",
+            selected: false,
+          };
+          setGeneratedImages((current) => [
+            generatedImage,
+            ...current.filter((image) => image.path !== event.path),
+          ]);
+          setSelectedGeneratedPath(event.path);
+          setProgress("");
+          onLibraryChange();
         }
       });
 
@@ -159,26 +230,60 @@ export function InitialImageDialog({
   };
 
   const handleUpload = async (files: FileList) => {
-    const image = files[0];
-    if (!image || busy) return;
+    const sourceFiles = Array.from(files);
+    if (sourceFiles.length === 0 || busy) return;
     setUploading(true);
     setError("");
     try {
-      const payload = await uploadSceneReferenceImage(scene.id, image);
-      const option = {
-        id: `upload:${payload.path}`,
-        name: image.name,
-        path: payload.path,
-      };
-      setUploadedOptions((current) => [...current, option]);
-      setSelectedReferenceIds((current) => current.length < 4
-        ? [...current, option.id]
-        : [...current.slice(0, 3), option.id]);
-      addToast("success", t("canvas.referenceImageUploaded", { count: 1 }));
+      const uploaded = await Promise.all(sourceFiles.map(async (image) => {
+        const payload = await uploadSceneReferenceImage(scene.id, image);
+        return { id: `upload:${payload.path}`, name: image.name, path: payload.path };
+      }));
+      setUploadedOptions((current) => [
+        ...current,
+        ...uploaded.filter((option) => !current.some((item) => item.path === option.path)),
+      ]);
+      setSelectedReferenceIds((current) => [
+        ...current,
+        ...uploaded.map((option) => option.id).filter((id) => !current.includes(id)),
+      ].slice(0, 4));
+      addToast("success", t("canvas.referenceImageUploaded", { count: uploaded.length }));
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : String(uploadError));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleRemoveGenerated = async (imagePath: string) => {
+    if (busy) return;
+    setRemovingGeneratedPath(imagePath);
+    setError("");
+    try {
+      await deleteSceneReferenceImage(scene.id, imagePath);
+      setGeneratedImages((current) => current.filter((image) => image.path !== imagePath));
+      if (selectedGeneratedPath === imagePath) setSelectedGeneratedPath(null);
+      onLibraryChange();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : String(removeError));
+    } finally {
+      setRemovingGeneratedPath(null);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!selectedGeneratedPath || busy) return;
+    setImporting(true);
+    setError("");
+    try {
+      await saveTargetImagePrompt();
+      const result = await importSceneReferenceImage(scene.id, selectedGeneratedPath);
+      addToast("success", t("canvas.initialImageImported"));
+      onImported(result.path);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : String(importError));
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -230,18 +335,18 @@ export function InitialImageDialog({
           style={{ width: 132, height: 28, fontSize: 11 }}
         />
       )}
-      onClose={onClose}
+      onClose={() => void handleClose()}
       busy={busy}
       width="min(620px, 96vw)"
       maxHeight="min(760px, 92vh)"
       footer={
         <>
-          <button type="button" className="btn" onClick={onClose} disabled={busy}>
+          <button type="button" className="btn" onClick={() => void handleClose()} disabled={busy}>
             {t("common.cancel")}
           </button>
           <button
             type="button"
-            className="btn-p"
+            className="btn"
             onClick={handleGenerate}
             disabled={!canGenerate || busy}
             aria-busy={busy}
@@ -252,6 +357,18 @@ export function InitialImageDialog({
             {generating
               ? t("canvas.generatingInitialImage")
               : t("canvas.generateInitialImage")}
+          </button>
+          <button
+            type="button"
+            className="btn-p"
+            onClick={handleImport}
+            disabled={!selectedGeneratedPath || busy}
+            aria-busy={importing}
+          >
+            {importing
+              ? <IconLoader2 size={14} className="loading-spinner" />
+              : <IconFileImport size={14} />}
+            {t("canvas.importInitialImage")}
           </button>
         </>
       }
@@ -274,15 +391,15 @@ export function InitialImageDialog({
           />
 
           <label className="form-label" htmlFor="initial-image-prompt">
-            {source === "objects" ? t("canvas.imageEditPrompt") : t("params.description")} *
+            {t("canvas.imageEditPrompt")} *
           </label>
           <textarea
             id="initial-image-prompt"
-            value={prompt}
+            value={typeof prompt === "string" ? prompt : ""}
             onChange={(event) => setPrompt(event.target.value)}
             rows={4}
             disabled={busy}
-            placeholder={source === "objects" ? t("canvas.imageEditPromptPlaceholder") : undefined}
+            placeholder={t("canvas.imageEditPromptPlaceholder")}
             required
             style={{ resize: "vertical" }}
           />
@@ -314,6 +431,75 @@ export function InitialImageDialog({
               <span>{error || progress}</span>
             </div>
           )}
+
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>
+                {t("canvas.generatedImageLibrary")}
+              </label>
+              <span style={{ fontSize: 9, color: "var(--text3)" }}>
+                {t("canvas.referenceImageCount", { count: generatedImages.length })}
+              </span>
+            </div>
+            {generatedImages.length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7 }}>
+                {generatedImages.map((image) => {
+                  const selected = selectedGeneratedPath === image.path;
+                  const removing = removingGeneratedPath === image.path;
+                  return (
+                    <div
+                      key={image.path}
+                      style={{
+                        minWidth: 0,
+                        position: "relative",
+                        overflow: "hidden",
+                        borderRadius: 6,
+                        border: selected ? "1.5px solid var(--accent)" : "0.5px solid var(--border)",
+                        background: selected ? "var(--accent-dim)" : "var(--bg2)",
+                        opacity: removing ? 0.55 : 1,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGeneratedPath(image.path)}
+                        disabled={busy}
+                        aria-pressed={selected}
+                        style={{ width: "100%", padding: 0, border: 0, background: "transparent", cursor: busy ? "not-allowed" : "pointer" }}
+                      >
+                        <img
+                          src={`/api/files/${image.path}`}
+                          alt={t("canvas.generatedImageLibrary")}
+                          style={{ display: "block", width: "100%", aspectRatio: "16 / 10", objectFit: "cover" }}
+                        />
+                      </button>
+                      {selected && (
+                        <span style={{ position: "absolute", left: 5, top: 5, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "var(--accent)", color: "var(--bg0)", pointerEvents: "none" }}>
+                          <IconCheck size={12} stroke={2.5} />
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => void handleRemoveGenerated(image.path)}
+                        disabled={busy}
+                        title={t("common.delete")}
+                        aria-label={t("common.delete")}
+                        style={{ position: "absolute", right: 5, top: 5, width: 23, height: 23, background: "rgba(12, 12, 12, 0.8)", color: "#fff" }}
+                      >
+                        {removing
+                          ? <IconLoader2 size={12} className="loading-spinner" />
+                          : <IconTrash size={12} />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ minHeight: 76, display: "flex", alignItems: "center", justifyContent: "center", border: "0.5px solid var(--border)", borderRadius: 6, color: "var(--text3)", fontSize: 10 }}>
+                {t("canvas.noGeneratedCandidates")}
+              </div>
+            )}
+          </div>
     </ModalDialog>
   );
 }

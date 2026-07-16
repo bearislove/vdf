@@ -115,7 +115,7 @@ export function InitialImageReferencePicker({
           ))}
           <UploadZone
             accept="image/jpeg,image/png,image/webp"
-            multiple={false}
+            multiple
             onFiles={onUpload}
             label={t("canvas.sourceUpload")}
             loadingLabel={t("common.uploading")}

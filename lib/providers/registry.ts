@@ -2,6 +2,7 @@ import { OpenAICompatibleLLMProvider } from "@/lib/providers/llm/openai-compatib
 import { AgnesImageProvider } from "@/lib/providers/image/agnes";
 import { ComfyUIImageProvider } from "@/lib/providers/image/comfyui";
 import { AgnesVideoProvider } from "@/lib/providers/video/agnes";
+import { getAgnesPrimaryApiKey } from "@/lib/providers/agnes";
 import { ComfyUIVideoProvider } from "@/lib/providers/video/comfyui";
 import { ProviderRegistry } from "@/lib/providers/provider-registry";
 import type {
@@ -41,7 +42,7 @@ const textProviders = new ProviderRegistry<
   .register(
     new OpenAICompatibleLLMProvider({
       name: "agnes",
-      apiKey: process.env.AGNES_AI_API_KEY ?? "",
+      apiKey: getAgnesPrimaryApiKey(),
       baseURL: process.env.AGNES_AI_BASE_URL ?? "https://apihub.agnes-ai.com/v1",
       model: process.env.AGNES_AI_TEXT_MODEL ?? "agnes-2.0-flash",
     }),

@@ -8,6 +8,7 @@ export interface Scene {
   title: string;
   promptEn: string;
   promptEnOverride: string | null;
+  targetImagePrompt: string;
   negativePrompt: string;
   cameraDirection: string;
   shotType: ShotType;

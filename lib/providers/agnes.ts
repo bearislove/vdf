@@ -1,16 +1,84 @@
 import fs from "fs";
 import path from "path";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import sharp from "sharp";
 import { storageRelative } from "@/lib/storage";
 import { toErrorMessage } from "@/lib/utils/errors";
 
 const AGNES_BASE_URL = (process.env.AGNES_AI_BASE_URL ?? "https://apihub.agnes-ai.com/v1").replace(/\/+$/, "");
-const AGNES_API_KEY = process.env.AGNES_AI_API_KEY ?? "";
 const AGNES_TEXT_MODEL = process.env.AGNES_AI_TEXT_MODEL ?? "agnes-2.0-flash";
 const AGNES_IMAGE_MODEL = process.env.AGNES_AI_IMAGE_MODEL ?? "agnes-image-2.1-flash";
 const AGNES_VIDEO_MODEL = process.env.AGNES_AI_VIDEO_MODEL ?? "agnes-video-v2.0";
 const AGNES_PUBLIC_MEDIA_BASE_URL = (process.env.AGNES_PUBLIC_MEDIA_BASE_URL ?? "").replace(/\/+$/, "");
+
+interface AgnesCredential {
+  id: string;
+  apiKey: string;
+}
+
+function parseAgnesApiKeys(): string[] {
+  const configured = process.env.AGNES_AI_API_KEYS?.trim();
+  let pooledKeys: string[] = [];
+  if (configured) {
+    if (configured.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(configured) as unknown;
+        if (Array.isArray(parsed)) {
+          pooledKeys = parsed.filter((key): key is string => typeof key === "string");
+        }
+      } catch {
+        throw new Error("AGNES_AI_API_KEYS phải là JSON array hợp lệ hoặc danh sách phân tách bằng dấu phẩy/xuống dòng");
+      }
+    } else {
+      pooledKeys = configured.split(/[\n,]+/);
+    }
+  }
+  const fallbackKey = process.env.AGNES_AI_API_KEY ?? "";
+  return Array.from(new Set([
+    ...pooledKeys.map((key) => key.trim()),
+    fallbackKey.trim(),
+  ].filter(Boolean)));
+}
+
+const AGNES_CREDENTIALS: AgnesCredential[] = parseAgnesApiKeys().map((apiKey) => ({
+  id: createHash("sha256").update(apiKey).digest("hex").slice(0, 16),
+  apiKey,
+}));
+type AgnesCredentialLane = "text" | "image" | "video";
+const agnesCredentialCursors: Record<AgnesCredentialLane, number> = {
+  text: 0,
+  image: 0,
+  video: 0,
+};
+
+function requireAgnesCredentials(): AgnesCredential[] {
+  if (AGNES_CREDENTIALS.length === 0) {
+    throw new Error("AGNES_AI_API_KEY hoặc AGNES_AI_API_KEYS chưa được cấu hình trong .env");
+  }
+  return AGNES_CREDENTIALS;
+}
+
+function nextAgnesCredential(lane: AgnesCredentialLane): AgnesCredential {
+  const credentials = requireAgnesCredentials();
+  const cursor = agnesCredentialCursors[lane];
+  const credential = credentials[cursor % credentials.length];
+  agnesCredentialCursors[lane] = (cursor + 1) % credentials.length;
+  return credential;
+}
+
+function resolveAgnesCredential(credentialId?: string): AgnesCredential {
+  const credentials = requireAgnesCredentials();
+  if (!credentialId) return credentials[0];
+  const credential = credentials.find((candidate) => candidate.id === credentialId);
+  if (!credential) {
+    throw new Error(`Không tìm thấy Agnes credential ${credentialId}; token có thể đã bị xóa khỏi AGNES_AI_API_KEYS`);
+  }
+  return credential;
+}
+
+export function getAgnesPrimaryApiKey(): string {
+  return AGNES_CREDENTIALS[0]?.apiKey ?? "";
+}
 
 /** Agnes chấp nhận ảnh tham chiếu cạnh dài tối đa ~1536px; ảnh lớn hơn làm phồng payload và có thể bị từ chối */
 const REFERENCE_MAX_EDGE = 1536;
@@ -227,9 +295,8 @@ export async function uploadReferenceImageToCloud(absPath: string): Promise<stri
   );
 }
 
-function authHeaders(): Record<string, string> {
-  if (!AGNES_API_KEY) throw new Error("AGNES_AI_API_KEY chưa được cấu hình trong .env");
-  return { Authorization: `Bearer ${AGNES_API_KEY}`, "Content-Type": "application/json" };
+function authHeaders(credential: AgnesCredential): Record<string, string> {
+  return { Authorization: `Bearer ${credential.apiKey}`, "Content-Type": "application/json" };
 }
 
 /** Convert visual content references into a video prompt without treating them as video keyframes. */
@@ -238,6 +305,7 @@ export async function agnesGroundVideoPrompt(
   referenceImagePaths: string[]
 ): Promise<string> {
   if (referenceImagePaths.length === 0) return scenePrompt;
+  const credential = nextAgnesCredential("text");
   const imageDataUris = await Promise.all(
     referenceImagePaths.slice(0, 4).map((imagePath) => fileToVisionDataUri(imagePath))
   );
@@ -270,7 +338,7 @@ ${scenePrompt}`,
     try {
       response = await fetch(`${AGNES_BASE_URL}/chat/completions`, {
         method: "POST",
-        headers: authHeaders(),
+        headers: authHeaders(credential),
         body: requestBody,
         signal: AbortSignal.timeout(120000),
       });
@@ -308,13 +376,14 @@ export interface AgnesImageParams {
 }
 
 export async function agnesGenerateImage(params: AgnesImageParams): Promise<Buffer> {
+  const credential = nextAgnesCredential("image");
   const extraBody: Record<string, unknown> = { response_format: "b64_json" };
   if (params.referenceImagePaths?.length) {
     extraBody.image = await Promise.all(params.referenceImagePaths.map((p) => fileToDataUri(p)));
   }
   const res = await fetch(`${AGNES_BASE_URL}/images/generations`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: authHeaders(credential),
     body: JSON.stringify({
       model: params.model || AGNES_IMAGE_MODEL,
       prompt: params.prompt,
@@ -350,8 +419,8 @@ export interface AgnesVideoParams {
   frameRate?: number;
   seed?: number;
   /**
-   * Ảnh tham chiếu, tối đa 4 (Agnes cắt phần thừa). Mapping theo contract:
-   * 1 ảnh → body.image (image-to-video); ≥2 ảnh → extra_body.image,
+   * Ảnh video, tối đa 3. Mapping theo contract:
+   * 1 ảnh → body.image (image-to-video); 2-3 ảnh → extra_body.image,
    * và nếu có role first_frame/last_frame → extra_body.mode = "keyframes".
    */
   images?: AgnesVideoImageRef[];
@@ -361,11 +430,13 @@ export interface AgnesVideoJob {
   taskId: string;
   videoId?: string;
   model?: string;
+  credentialId?: string;
 }
 
-const MAX_VIDEO_REFERENCE_IMAGES = 4;
+const MAX_VIDEO_REFERENCE_IMAGES = 3;
 
 export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesVideoJob> {
+  const credential = nextAgnesCredential("video");
   const body: Record<string, unknown> = {
     model: AGNES_VIDEO_MODEL,
     prompt: params.prompt,
@@ -384,23 +455,23 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
       const raw = ref.pathOrUrl?.trim();
       return raw ? [{ raw, role: ref.role ?? "" }] : [];
     });
+  const roles = refs.map(({ role }) => role);
+  const hasKeyframeRole = roles.some((role) => role === "first_frame" || role === "last_frame");
+  if (refs.length > 1 && !hasKeyframeRole) {
+    throw new Error("Agnes AI chỉ nhận nhiều ảnh khi tạo video ở chế độ keyframes");
+  }
   const urls = await Promise.all(refs.map(({ raw }) =>
     /^https?:\/\//i.test(raw) ? Promise.resolve(raw) : uploadReferenceImageToCloud(raw)
   ));
-  const roles = refs.map(({ role }) => role);
   if (urls.length === 1) {
     body.image = urls[0];
   } else if (urls.length > 1) {
-    const extraBody: Record<string, unknown> = { image: urls };
-    if (roles.some((role) => role === "first_frame" || role === "last_frame")) {
-      extraBody.mode = "keyframes";
-    }
-    body.extra_body = extraBody;
+    body.extra_body = { image: urls, mode: "keyframes" };
   }
 
   const res = await fetch(`${AGNES_BASE_URL}/videos`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: authHeaders(credential),
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30000),
   });
@@ -410,7 +481,12 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
   const data = await res.json();
   const taskId = data.task_id ?? data.id ?? data.video_id;
   if (!taskId) throw new Error("Agnes AI không trả về task_id");
-  return { taskId, videoId: data.video_id, model: String(body.model) };
+  return {
+    taskId,
+    videoId: data.video_id,
+    model: String(body.model),
+    credentialId: credential.id,
+  };
 }
 
 export interface AgnesVideoStatus {
@@ -421,6 +497,7 @@ export interface AgnesVideoStatus {
 }
 
 export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVideoStatus> {
+  const credential = resolveAgnesCredential(job.credentialId);
   // Prefer the video_id-based endpoint per docs (cần kèm model_name); fall back to the legacy task_id path.
   const url = job.videoId
     ? `${AGNES_BASE_URL.replace(/\/v1$/, "")}/agnesapi?${new URLSearchParams({
@@ -429,7 +506,7 @@ export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVide
       })}`
     : `${AGNES_BASE_URL}/videos/${encodeURIComponent(job.taskId)}`;
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${AGNES_API_KEY}` },
+    headers: { Authorization: `Bearer ${credential.apiKey}` },
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
@@ -472,11 +549,12 @@ export async function agnesPollVideo(
 }
 
 export async function agnesTestConnection(): Promise<{ ok: boolean; error?: string }> {
-  if (!AGNES_API_KEY) return { ok: false, error: "AGNES_AI_API_KEY chưa được cấu hình trong .env" };
+  const credential = AGNES_CREDENTIALS[0];
+  if (!credential) return { ok: false, error: "AGNES_AI_API_KEY hoặc AGNES_AI_API_KEYS chưa được cấu hình trong .env" };
   try {
     const res = await fetch(`${AGNES_BASE_URL}/chat/completions`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: authHeaders(credential),
       body: JSON.stringify({ model: "agnes-2.0-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
       signal: AbortSignal.timeout(15000),
     });

@@ -3,6 +3,8 @@ import { apiFetch } from "@/lib/utils/api";
 export interface SceneReferenceImage {
   path: string;
   createdAt: string;
+  kind: "generated" | "initial" | "upload" | "object";
+  selected: boolean;
 }
 
 interface LastFrameVariantLike {
@@ -33,31 +35,12 @@ interface SceneReferenceImagesResponse {
   images: SceneReferenceImage[];
 }
 
-const SCENE_REFERENCE_IMAGES_CHANGED = "story-forge:scene-reference-images-changed";
-
 function endpoint(sceneId: string): string {
   return `/api/scenes/${sceneId}/reference-images`;
 }
 
 export function listSceneReferenceImages(sceneId: string): Promise<SceneReferenceImagesResponse> {
   return apiFetch<SceneReferenceImagesResponse>(endpoint(sceneId));
-}
-
-export function notifySceneReferenceImagesChanged(sceneId: string): void {
-  window.dispatchEvent(new CustomEvent(SCENE_REFERENCE_IMAGES_CHANGED, {
-    detail: { sceneId },
-  }));
-}
-
-export function subscribeToSceneReferenceImageChanges(
-  listener: (sceneId: string) => void
-): () => void {
-  const handleChange = (event: Event) => {
-    const sceneId = (event as CustomEvent<{ sceneId?: unknown }>).detail?.sceneId;
-    if (typeof sceneId === "string") listener(sceneId);
-  };
-  window.addEventListener(SCENE_REFERENCE_IMAGES_CHANGED, handleChange);
-  return () => window.removeEventListener(SCENE_REFERENCE_IMAGES_CHANGED, handleChange);
 }
 
 export function deleteSceneReferenceImage(sceneId: string, path: string): Promise<{ ok: boolean }> {
@@ -67,9 +50,21 @@ export function deleteSceneReferenceImage(sceneId: string, path: string): Promis
   });
 }
 
-export async function uploadSceneReferenceImage(sceneId: string, image: File): Promise<{ path: string }> {
+export function importSceneReferenceImage(sceneId: string, path: string): Promise<{ path: string }> {
+  return apiFetch(endpoint(sceneId), {
+    method: "PUT",
+    body: JSON.stringify({ path }),
+  });
+}
+
+export async function uploadSceneReferenceImage(
+  sceneId: string,
+  image: File,
+  options: { useAsInitial?: boolean } = {}
+): Promise<{ path: string }> {
   const formData = new FormData();
   formData.append("image", image);
+  if (options.useAsInitial) formData.append("purpose", "initial");
   const response = await fetch(endpoint(sceneId), { method: "POST", body: formData });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || typeof payload.path !== "string") {

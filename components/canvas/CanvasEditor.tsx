@@ -28,7 +28,6 @@ import type { VideoVariant } from "@/types/video";
 import { getSceneCanvasPosition, SCENES_PER_ROW } from "@/lib/canvas/scene-layout";
 import { useAppStore } from "@/store/useAppStore";
 import { useTranslation } from "@/hooks/useTranslation";
-import { notifySceneReferenceImagesChanged } from "@/lib/utils/scene-reference-images";
 
 const nodeTypes = {
   sceneNode: SceneNode,
@@ -161,7 +160,6 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   const handleDropObject = useCallback(async (sceneId: string, objectId: string) => {
     try {
       await apiPost(`/api/scenes/${sceneId}/links`, { objectId, role: "present" });
-      notifySceneReferenceImagesChanged(sceneId);
       cbRef.current.onScenesChange();
     } catch (error) {
       addToast("error", error instanceof Error ? error.message : String(error));
@@ -211,6 +209,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
     if (!deleteTarget) return;
     if (deleteTarget.kind === "scene") await execDeleteScene(deleteTarget.id);
     else await execDeleteEdge(deleteTarget.sourceId, deleteTarget.targetId);
+    selectionRef.current = { nodeIds: [], edgeIds: [] };
     setDeleteTarget(null);
   }, [deleteTarget, execDeleteScene, execDeleteEdge]);
 
@@ -365,9 +364,31 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.type === "sceneNode") selectScene(node.id);
+      if (node.type === "sceneNode") {
+        selectionRef.current = { nodeIds: [node.id], edgeIds: [] };
+        setEdges((currentEdges) => currentEdges.map((edge) => (
+          edge.selected ? { ...edge, selected: false } : edge
+        )));
+        selectScene(node.id);
+      }
     },
-    [selectScene]
+    [selectScene, setEdges]
+  );
+
+  const onEdgeClick = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.stopPropagation();
+      selectionRef.current = { nodeIds: [], edgeIds: [edge.id] };
+      selectScene(null);
+      setNodes((currentNodes) => currentNodes.map((node) => (
+        node.selected ? { ...node, selected: false } : node
+      )));
+      setEdges((currentEdges) => currentEdges.map((currentEdge) => ({
+        ...currentEdge,
+        selected: currentEdge.id === edge.id,
+      })));
+    },
+    [selectScene, setEdges, setNodes]
   );
 
   return (
@@ -420,6 +441,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

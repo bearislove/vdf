@@ -7,6 +7,7 @@ import {
   getBezierPath,
   type EdgeProps,
 } from "reactflow";
+import { IconX } from "@tabler/icons-react";
 
 export interface DeletableEdgeData {
   sourceId: string;
@@ -25,6 +26,7 @@ export function DeletableEdge({
   style,
   markerEnd,
   data,
+  selected,
 }: EdgeProps<DeletableEdgeData>) {
   const [hovered, setHovered] = useState(false);
 
@@ -41,16 +43,27 @@ export function DeletableEdge({
     <>
       {/* Invisible wide hit area for hover */}
       <path
+        className="react-flow__edge-interaction"
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={16}
+        strokeWidth={20}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{ cursor: "pointer" }}
       />
 
-      <BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          ...style,
+          stroke: selected ? "var(--accent)" : style?.stroke,
+          strokeWidth: selected ? 2.5 : style?.strokeWidth,
+          filter: selected ? "drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent))" : undefined,
+        }}
+        markerEnd={markerEnd}
+      />
 
       {hovered && data?.onDelete && (
         <EdgeLabelRenderer>
@@ -84,7 +97,7 @@ export function DeletableEdge({
                 lineHeight: 1,
               }}
             >
-              ✕
+              <IconX size={10} stroke={2.4} aria-hidden="true" />
             </button>
           </div>
         </EdgeLabelRenderer>

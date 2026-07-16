@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { buildPrompt, resolveObjectReferenceImagePaths } from "@/lib/comfyui/prompt";
 import { imageGenerationSSEResponse } from "@/lib/providers/image/sse";
 import { getImageProvider, resolveImageProviderForReferences } from "@/lib/providers/registry";
-import { ensureCompositeImageSelected } from "@/lib/scene-composite-selection";
 import { pickLastFrameVariant } from "@/lib/utils/scene-reference-images";
 import {
   ensureDir,
@@ -136,9 +135,7 @@ async function saveCompositeImage(scene: GenerationScene, buffer: Buffer): Promi
   ensureDir(directory);
   const outputPath = path.join(directory, `composite_${Date.now()}.png`);
   fs.writeFileSync(outputPath, buffer);
-  const relativePath = storageRelative(outputPath);
-  await ensureCompositeImageSelected(scene, { filmId: scene.episode.filmId, episodeId: scene.episodeId }, relativePath);
-  return relativePath;
+  return storageRelative(outputPath);
 }
 
 export async function POST(

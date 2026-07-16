@@ -2,7 +2,7 @@ export const LTX_VIDEO_DEFAULTS = {
   width: 1280,
   height: 720,
   fps: 24,
-  numFrames: 97,
+  numFrames: 121,
   maxNumFrames: 257,
   steps: 25,
   cfg: 3.0,

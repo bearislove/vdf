@@ -64,9 +64,11 @@ export interface VideoGenContext {
   variantId: string;
   filmId: string;
   episodeId: string;
-  /** Absolute path locked when the variant is created; all providers must use this exact first frame. */
+  /** Required scene image that drives image-to-video generation. */
+  inputImagePath?: string;
+  /** Optional final frame from the previous scene, controlled by useLastFrameChaining. */
   firstFrameImagePath?: string;
-  firstFrameSource: "none" | "initial_reference" | "previous_scene";
+  firstFrameSource: "none" | "previous_scene";
   /** Visual content references from Initial reference image; never first/last keyframes. */
   contentReferenceImagePaths: string[];
 }
@@ -74,6 +76,7 @@ export interface VideoGenContext {
 export interface VideoSubmittedMeta {
   strategy?: string;
   externalJobId?: string;
+  providerCredentialId?: string;
   comfyPromptId?: string;
   comfyClientId?: string;
   workflowSnapshot?: Record<string, unknown>;
@@ -116,6 +119,7 @@ export interface RecoverableVariant {
   sceneId: string;
   comfyPromptId: string | null;
   externalJobId: string | null;
+  providerCredentialId: string | null;
 }
 
 export interface VideoProvider {

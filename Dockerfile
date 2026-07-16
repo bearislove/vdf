@@ -14,7 +14,7 @@ FROM source AS development
 
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
-CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+CMD ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && npm run dev -- --hostname 0.0.0.0"]
 
 FROM source AS production-build
 
