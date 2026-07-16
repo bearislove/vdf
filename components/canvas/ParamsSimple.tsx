@@ -4,6 +4,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 
 export interface SimpleParams {
   promptEn: string;
+  negativePrompt: string;
   duration: string;
   aspectRatio: string;
 }
@@ -13,7 +14,7 @@ interface ParamsSimpleProps {
   onChange: (values: Partial<SimpleParams>) => void;
 }
 
-const DURATION_PRESETS = [2, 4, 6, 8, 12, 16, 20];
+const DURATION_PRESETS = [2, 3, 4, 5, 6, 8, 12, 16, 18];
 const ASPECT_RATIO_OPTIONS = ["16:9", "9:16", "1:1", "3:2", "2:3"];
 
 export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
@@ -21,6 +22,20 @@ export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
 
   return (
     <>
+      <div style={{ marginBottom: 10 }}>
+        <label className="form-label" htmlFor="negative-prompt">
+          {t("params.negativePrompt")}
+        </label>
+        <textarea
+          id="negative-prompt"
+          value={values.negativePrompt}
+          onChange={(event) => onChange({ negativePrompt: event.target.value })}
+          rows={3}
+          placeholder={t("params.negativePromptPlaceholder")}
+          style={{ resize: "vertical" }}
+        />
+      </div>
+
       <div style={{ marginBottom: 8 }}>
         <label className="form-label">{t("params.duration")}</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 5 }}>

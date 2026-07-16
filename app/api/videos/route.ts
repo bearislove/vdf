@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomInt } from "crypto";
 import fs from "fs";
 import { prisma } from "@/lib/prisma";
-import { resolveFirstFrameImage } from "@/lib/comfyui/prompt";
-import { getVideoProvider, resolveVideoProviderName } from "@/lib/providers/registry";
-import { newestSceneCompositeImage, storageRelative } from "@/lib/storage";
+import { resolvePreviousSceneFirstFrame, resolveObjectReferenceImagePaths } from "@/lib/comfyui/prompt";
+import {
+  getVideoProvider,
+  resolveVideoProviderName,
+  serializeGenerationProviderName,
+} from "@/lib/providers/registry";
+import { listSceneCompositeImages, storageRelative } from "@/lib/storage";
+import { toErrorMessage } from "@/lib/utils/errors";
+import { pickLastFrameVariant } from "@/lib/utils/scene-reference-images";
 import { finalizeVideoFile } from "@/lib/video/finalize-video-file";
+import { dedupeAbsoluteImagePaths, dedupeStorageImagePaths } from "@/lib/video/reference-image-dedup";
 import type { VideoGenContext, VideoGenHooks } from "@/lib/providers/types";
 import type { Prisma } from "@prisma/client";
 
@@ -28,6 +35,9 @@ function buildVideoHooks(ids: {
           ...(meta.workflowSnapshot !== undefined && {
             workflowSnapshot: meta.workflowSnapshot as Prisma.InputJsonValue,
           }),
+          ...(meta.referenceImagePaths !== undefined && {
+            referenceImagePaths: dedupeStorageImagePaths(meta.referenceImagePaths),
+          }),
         },
       });
     },
@@ -46,11 +56,10 @@ function buildVideoHooks(ids: {
       await finalizeVideoFile({ ...ids, buffer, ext });
     },
     async onError(message) {
-      // message có thể là object nếu provider trả lỗi lạ — ép về string kẻo Prisma từ chối và variant kẹt GENERATING mãi
-      const errorDetail = typeof message === "string" ? message : JSON.stringify(message);
+      // Ép về string kẻo Prisma từ chối errorDetail và variant kẹt GENERATING mãi
       await prisma.videoVariant.update({
         where: { id: ids.variantId },
-        data: { status: "FAILED", errorDetail, completedAt: new Date() },
+        data: { status: "FAILED", errorDetail: toErrorMessage(message), completedAt: new Date() },
       }).catch(() => {});
     },
   };
@@ -77,39 +86,61 @@ export async function POST(req: NextRequest) {
   const filmId = scene.episode.filmId;
   const episodeId = scene.episodeId;
 
-  // Previous scene's last variant, for last-frame chaining
+  // Last frame của scene trước cho chaining — cùng quy tắc chọn với luồng tạo ảnh scene
   const prevScene = await prisma.scene.findFirst({
-    where: { episodeId, order: scene.order - 1 },
-    include: { selectedVideo: true, videoVariants: { orderBy: { completedAt: "desc" }, take: 1 } },
+    where: { episodeId, order: { lt: scene.order } },
+    orderBy: { order: "desc" },
+    include: {
+      selectedVideo: true,
+      videoVariants: {
+        where: { status: "DONE", lastFramePath: { not: null } },
+        orderBy: { completedAt: "desc" },
+      },
+    },
   });
-  const previousVariant = prevScene?.selectedVideo ?? prevScene?.videoVariants?.[0] ?? null;
+  const previousVariant = pickLastFrameVariant(prevScene?.selectedVideo, prevScene?.videoVariants);
 
-  // Chưa chọn ảnh nào trong mục Initial reference image → tự lấy ảnh mới nhất và lưu làm ảnh được chọn
-  if (!scene.compositeImagePath) {
-    const newestImage = newestSceneCompositeImage(filmId, episodeId, scene.id);
-    if (newestImage) {
-      scene.compositeImagePath = storageRelative(newestImage);
-      await prisma.scene.update({
-        where: { id: scene.id },
-        data: { compositeImagePath: scene.compositeImagePath },
-      });
-    }
-  }
-
-  const resolvedFirstFrame = resolveFirstFrameImage(
-    scene as unknown as VideoGenContext["scene"],
-    previousVariant as VideoGenContext["previousVariant"],
-  );
+  const useLastFrameChaining = typeof body.useLastFrameChaining === "boolean"
+    ? body.useLastFrameChaining
+    : scene.useLastFrameChaining;
+  const sceneReferenceImages = listSceneCompositeImages(filmId, episodeId, scene.id);
+  const previousSceneFirstFrame = useLastFrameChaining
+    ? resolvePreviousSceneFirstFrame(previousVariant)
+    : undefined;
+  const selectedInitialImage = scene.compositeImagePath
+    ? sceneReferenceImages.find(
+        (image) => storageRelative(image.absPath) === scene.compositeImagePath
+      )
+    : undefined;
+  const firstSceneInitialImage = !prevScene
+    ? selectedInitialImage?.absPath ?? sceneReferenceImages[0]?.absPath
+    : undefined;
+  const resolvedFirstFrame = previousSceneFirstFrame ?? firstSceneInitialImage;
   const firstFrameImagePath = resolvedFirstFrame && fs.existsSync(resolvedFirstFrame)
     ? resolvedFirstFrame
     : undefined;
+  const firstFrameSource: VideoGenContext["firstFrameSource"] = previousSceneFirstFrame
+    ? "previous_scene"
+    : firstFrameImagePath
+      ? "initial_reference"
+      : "none";
   const referenceImagePath = firstFrameImagePath
     ? storageRelative(firstFrameImagePath)
     : null;
+  const contentReferenceImagePaths = dedupeAbsoluteImagePaths([
+    ...sceneReferenceImages.map((image) => image.absPath),
+    ...resolveObjectReferenceImagePaths(
+      scene.objectLinks as unknown as Parameters<typeof resolveObjectReferenceImagePaths>[0]
+    ),
+  ]).filter((imagePath) => imagePath !== firstFrameImagePath).slice(0, 4);
   const videoParams = {
     ...requestedParams,
+    negativePrompt: typeof requestedParams.negativePrompt === "string"
+      ? requestedParams.negativePrompt.trim()
+      : scene.negativePrompt,
     seed: randomInt(0, 2 ** 31),
     referenceImagePath,
+    useLastFrameChaining,
   };
 
   const providerName = resolveVideoProviderName(bodyProvider);
@@ -121,7 +152,8 @@ export async function POST(req: NextRequest) {
     filmId,
     episodeId,
     firstFrameImagePath,
-    previousVariant: previousVariant as VideoGenContext["previousVariant"],
+    firstFrameSource,
+    contentReferenceImagePaths,
   };
 
   const validationError = provider.validate(baseCtx);
@@ -137,7 +169,11 @@ export async function POST(req: NextRequest) {
       workflowSnapshot: {},
       status: "QUEUED",
       strategy: "t2v",
-      provider: providerName === "agnes" ? "AGNES" : "COMFYUI",
+      provider: serializeGenerationProviderName(providerName),
+      referenceImagePaths: dedupeStorageImagePaths([
+        ...(referenceImagePath ? [referenceImagePath] : []),
+        ...contentReferenceImagePaths.map((imagePath) => storageRelative(imagePath)),
+      ]),
     },
   });
 
@@ -145,7 +181,7 @@ export async function POST(req: NextRequest) {
   const hooks = buildVideoHooks({ variantId: variant.id, filmId, episodeId, sceneId });
 
   // Fire-and-forget: tiến trình được theo dõi qua DB (VariantList polling / recover)
-  void provider.runVideoGeneration(ctx, hooks).catch((e) => hooks.onError(String(e)));
+  void provider.runVideoGeneration(ctx, hooks).catch((e) => hooks.onError(toErrorMessage(e)));
 
   return NextResponse.json({ variantId: variant.id }, { status: 202 });
 }

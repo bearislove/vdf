@@ -35,20 +35,28 @@ export function sceneCompositeImagesDir(filmId: string, episodeId: string, scene
   return path.join(sceneDir(filmId, episodeId, sceneId), "composite_images");
 }
 
-const SCENE_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+export const SCENE_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
-/** Ảnh mới nhất trong thư mục Initial reference image của scene (đường dẫn tuyệt đối), hoặc null nếu trống */
-export function newestSceneCompositeImage(filmId: string, episodeId: string, sceneId: string): string | null {
+/** Toàn bộ file ảnh trong thư mục Initial reference image của scene, mới nhất trước (đường dẫn tuyệt đối) */
+export function listSceneCompositeImages(
+  filmId: string,
+  episodeId: string,
+  sceneId: string
+): Array<{ absPath: string; mtimeMs: number }> {
   const dir = sceneCompositeImagesDir(filmId, episodeId, sceneId);
-  if (!fs.existsSync(dir)) return null;
-  const newest = fs.readdirSync(dir, { withFileTypes: true })
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && SCENE_IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
     .map((entry) => {
       const absPath = path.join(dir, entry.name);
       return { absPath, mtimeMs: fs.statSync(absPath).mtimeMs };
     })
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
-  return newest?.absPath ?? null;
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+}
+
+/** Ảnh mới nhất trong thư mục Initial reference image của scene (đường dẫn tuyệt đối), hoặc null nếu trống */
+export function newestSceneCompositeImage(filmId: string, episodeId: string, sceneId: string): string | null {
+  return listSceneCompositeImages(filmId, episodeId, sceneId)[0]?.absPath ?? null;
 }
 
 export function variantDir(filmId: string, episodeId: string, sceneId: string, variantId: string) {

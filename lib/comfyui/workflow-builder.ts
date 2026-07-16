@@ -1,5 +1,4 @@
 import path from "path";
-import { STORAGE_ROOT } from "@/lib/storage";
 import { buildPrompt } from "./prompt";
 import { buildLTXT2VWorkflow } from "./workflows/ltx-t2v";
 import { buildLTXI2VWorkflow } from "./workflows/ltx-i2v";
@@ -14,7 +13,6 @@ import {
 } from "./defaults";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
-import type { VideoVariant } from "@/types/video";
 
 const LTXV_PATTERNS = ["ltx", "ltxv", "ltx-video", "lightricks"];
 const SVD_PATTERNS  = ["svd", "stable-video", "stable_video"];
@@ -34,7 +32,6 @@ export interface BuildWorkflowParams {
   variantId: string;
   firstFrameImagePath?: string;
   videoParams: Record<string, unknown>;
-  previousVariant?: VideoVariant | null;
 }
 
 /** Resolve video dimensions from params → scene → aspect ratio → model defaults */
@@ -55,7 +52,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
   strategy: string;
   uploadedImages: string[];
 }> {
-  const { scene, videoParams, previousVariant } = params;
+  const { scene, videoParams } = params;
 
   const videoModel =
     (videoParams.videoModel as string) ||
@@ -66,6 +63,9 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
     (videoParams.promptEn as string) || scene.promptEnOverride || scene.promptEn,
     scene.objectLinks,
   );
+  const negativePrompt = typeof videoParams.negativePrompt === "string"
+    ? videoParams.negativePrompt
+    : scene.negativePrompt;
 
   const seed = (videoParams.seed as number) ?? -1;
   const firstFrameStrength = (videoParams.firstFrameStrength as number) ?? LTX_VIDEO_DEFAULTS.firstFrameStrength;
@@ -81,12 +81,9 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
   }
   const strategy = firstFrameImage ? "I2V_SINGLE" : "T2V";
 
-  // Last frame from previous scene for chaining
-  let lastFrameImage: string | undefined;
-  if (scene.useLastFrameChaining && previousVariant?.lastFramePath) {
-    lastFrameImage = path.basename(previousVariant.lastFramePath);
-    uploadedImages.push(path.resolve(STORAGE_ROOT, previousVariant.lastFramePath));
-  }
+  // previous scene's last frame is already resolved as firstFrameImagePath by /api/videos.
+  // lastFrameImage is reserved for an explicit target frame of the current scene.
+  const lastFrameImage: string | undefined = undefined;
 
   // ── WAN ─────────────────────────────────────────────────────────────────────
   if (isWanModel(videoModel)) {
@@ -100,7 +97,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
     return {
       workflow: buildWanVideoWorkflow({
         positivePrompt: promptEn,
-        negativePrompt: (videoParams.negativePrompt as string) || "",
+        negativePrompt,
         model: videoModel,
         width,
         height,
@@ -162,7 +159,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
       return {
         workflow: buildLTXT2VWorkflow({
           positivePrompt: promptEn,
-          negativePrompt: (videoParams.negativePrompt as string) || "",
+          negativePrompt,
           width,
           height,
           numFrames,
@@ -182,7 +179,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
     return {
       workflow: buildLTXI2VWorkflow({
         positivePrompt: promptEn,
-        negativePrompt: (videoParams.negativePrompt as string) || "",
+        negativePrompt,
         width,
         height,
         numFrames,

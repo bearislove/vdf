@@ -13,7 +13,9 @@ import {
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAppStore } from "@/store/useAppStore";
 import type { EnrichmentResult } from "@/lib/ai/enrichment";
+import type { TextProviderName } from "@/lib/providers/types";
 import { ModalDialog } from "@/components/ui/ModalDialog";
+import { TextProviderSelect } from "@/components/ui/TextProviderSelect";
 
 interface Props {
   filmId: string;
@@ -48,12 +50,17 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
   const [revisionRequest, setRevisionRequest] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [textProvider, setTextProvider] = useState<TextProviderName>("openai");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const busy = analyzing || submitting;
   const analysisIsValid = analysis !== null
     && analysis.storyEnriched.trim().length > 0
-    && analysis.scenes.every((scene) => scene.title.trim() && scene.prompt_en.trim().length >= 10)
+    && analysis.scenes.every((scene) =>
+      scene.title.trim()
+      && scene.prompt_en.trim().length >= 10
+      && scene.negative_prompt.trim().length >= 3
+    )
     && analysis.objects.every((object) => object.name.trim());
 
   function handleFile(file: File) {
@@ -81,6 +88,7 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
           filmId,
           storyRaw: regenerate && analysis ? analysis.storyEnriched : storyText.trim(),
           revisionRequest: regenerate ? revisionRequest.trim() : undefined,
+          provider: textProvider,
         }),
       });
       if (!response.ok) throw new Error(await readError(response));
@@ -277,6 +285,17 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
               <IconSparkles size={17} />
               <span>{t("episode.aiPreviewOption")}</span>
             </label>
+            {form.useAI && (
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="form-label" style={{ margin: 0 }}>{t("generation.provider")}</span>
+                <TextProviderSelect
+                  value={textProvider}
+                  onChange={setTextProvider}
+                  disabled={busy}
+                  ariaLabel={t("generation.provider")}
+                />
+              </label>
+            )}
           </div>
         ) : (
           <div className="episode-preview-body">
@@ -357,6 +376,14 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
                         aria-label={t("episode.scenePrompt")}
                         required
                         minLength={10}
+                      />
+                      <textarea
+                        value={scene.negative_prompt}
+                        onChange={(event) => updateScene(index, { negative_prompt: event.target.value })}
+                        aria-label={t("episode.sceneNegativePrompt")}
+                        placeholder={t("params.negativePromptPlaceholder")}
+                        required
+                        minLength={3}
                       />
                     </div>
                     <div className="episode-scene-meta">

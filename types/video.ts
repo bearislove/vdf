@@ -17,6 +17,8 @@ export interface VideoVariant {
   progressStep: number;
   progressTotal: number;
   compositeImagePath: string | null;
+  /** Toàn bộ ảnh tham chiếu thực tế đã gửi cho provider (storage-relative), theo thứ tự gửi */
+  referenceImagePaths: string[];
   videoPath: string | null;
   lastFramePath: string | null;
   thumbnailPath: string | null;

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { newClientId, submitPrompt, listenToPrompt, downloadOutput, getHistory } from "@/lib/comfyui/client";
 import { buildWorkflow } from "@/lib/comfyui/workflow-builder";
+import { toErrorMessage } from "@/lib/utils/errors";
 import type {
   RecoverableVariant,
   VideoGenContext,
@@ -55,7 +56,6 @@ export class ComfyUIVideoProvider implements VideoProvider {
         variantId: ctx.variantId,
         firstFrameImagePath: ctx.firstFrameImagePath,
         videoParams: ctx.videoParams,
-        previousVariant: ctx.previousVariant as Parameters<typeof buildWorkflow>[0]["previousVariant"],
       });
 
       await uploadImagesToComfyUI(uploadedImages);
@@ -72,7 +72,7 @@ export class ComfyUIVideoProvider implements VideoProvider {
 
       await this.waitAndDeliver(promptId, clientId, hooks);
     } catch (e) {
-      await hooks.onError(String(e));
+      await hooks.onError(toErrorMessage(e));
     }
   }
 
@@ -85,7 +85,7 @@ export class ComfyUIVideoProvider implements VideoProvider {
     try {
       history = await getHistory(variant.comfyPromptId);
     } catch (e) {
-      return { status: "provider_unreachable", message: String(e), httpStatus: 502 };
+      return { status: "provider_unreachable", message: toErrorMessage(e), httpStatus: 502 };
     }
 
     if (!history) {
@@ -109,7 +109,7 @@ export class ComfyUIVideoProvider implements VideoProvider {
     try {
       buffer = await downloadOutput(image.filename, image.subfolder, image.type);
     } catch (e) {
-      return { status: "download_failed", message: String(e), httpStatus: 500 };
+      return { status: "download_failed", message: toErrorMessage(e), httpStatus: 500 };
     }
 
     await hooks.onComplete(buffer, path.extname(image.filename) || ".webp");
@@ -132,7 +132,7 @@ export class ComfyUIVideoProvider implements VideoProvider {
         const buffer = await downloadOutput(image.filename, image.subfolder, image.type);
         await hooks.onComplete(buffer, path.extname(image.filename) || ".webp");
       } catch (e) {
-        await hooks.onError(String(e));
+        await hooks.onError(toErrorMessage(e));
       }
     };
 

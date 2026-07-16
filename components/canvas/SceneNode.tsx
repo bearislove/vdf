@@ -24,6 +24,8 @@ export interface SceneNodeData {
   onRemoveLink?: (linkId: string) => void;
   onDropObject?: (objectId: string) => void;
   onDelete?: () => void;
+  targetPosition?: Position;
+  sourcePosition?: Position;
 }
 
 const CHAR_COLORS = ["#FF9C2A", "#5B9CF6", "#2ECC71", "#C084FC", "#F87171"];
@@ -52,7 +54,14 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<SceneNodeData>) {
-  const { scene, onRemoveLink, onDropObject, onDelete } = data;
+  const {
+    scene,
+    onRemoveLink,
+    onDropObject,
+    onDelete,
+    targetPosition = Position.Left,
+    sourcePosition = Position.Right,
+  } = data;
   const { t } = useTranslation();
   const { selectScene, selectObject, draggingObjectId } = useCanvasStore();
   const [isDragOver, setIsDragOver] = useState(false);
@@ -115,8 +124,8 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
       }}
     >
       {/* Handles */}
-      <Handle type="target" position={Position.Left} style={{ background: "var(--border2)" }} />
-      <Handle type="source" position={Position.Right} style={{ background: "var(--border2)" }} />
+      <Handle type="target" position={targetPosition} style={{ background: "var(--border2)" }} />
+      <Handle type="source" position={sourcePosition} style={{ background: "var(--border2)" }} />
 
       {/* Head */}
       <div

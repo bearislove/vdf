@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getVideoProvider } from "@/lib/providers/registry";
+import { getVideoProvider, resolveVideoProviderName } from "@/lib/providers/registry";
 import { finalizeVideoFile } from "@/lib/video/finalize-video-file";
 import type { VideoGenHooks } from "@/lib/providers/types";
 
@@ -24,7 +24,7 @@ export async function GET() {
   for (const variant of stuck) {
     if (!variant.scene) continue;
 
-    const provider = getVideoProvider(variant.provider === "AGNES" ? "agnes" : "comfyui");
+    const provider = getVideoProvider(resolveVideoProviderName(variant.provider));
     const markFailed = async (errorDetail: string) => {
       await prisma.videoVariant.update({ where: { id: variant.id }, data: { status: "FAILED", errorDetail } });
       failed.push(variant.id);

@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         type: object.type.toLowerCase(),
         description_en: object.descriptionEn,
       })),
-      revisionRequest
+      { revisionRequest, provider: body.provider }
     );
     return NextResponse.json(analysis);
   } catch (error) {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconCheck,
   IconLoader2,
   IconMaximize,
   IconPhotoPlus,
@@ -12,15 +11,17 @@ import {
 import { InitialImageDialog } from "./InitialImageDialog";
 import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
 import { MediaActionButton } from "@/components/ui/MediaActionButton";
+import { DownloadImageButton } from "@/components/ui/DownloadImageButton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAppStore } from "@/store/useAppStore";
+import {
+  deleteSceneReferenceImage,
+  listSceneReferenceImages,
+  subscribeToSceneReferenceImageChanges,
+  uploadSceneReferenceImage,
+  type SceneReferenceImage,
+} from "@/lib/utils/scene-reference-images";
 import type { SceneWithMedia } from "@/types/canvas";
-
-interface ReferenceImageItem {
-  path: string;
-  createdAt: string;
-  selected: boolean;
-}
 
 interface InitialImageManagerProps {
   scene: SceneWithMedia;
@@ -41,7 +42,7 @@ export function InitialImageManager({
 }: InitialImageManagerProps) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
-  const [images, setImages] = useState<ReferenceImageItem[]>([]);
+  const [images, setImages] = useState<SceneReferenceImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [draggingUpload, setDraggingUpload] = useState(false);
@@ -49,13 +50,18 @@ export function InitialImageManager({
   const [showDialog, setShowDialog] = useState(false);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const objectReferenceKey = useMemo(() => (
+    (scene.objectLinks ?? [])
+      .flatMap((link) => (link.object.refImages ?? []).map((image) => image.path))
+      .sort()
+      .join("|")
+  ), [scene.objectLinks]);
 
+  // GET đã tự đồng bộ ảnh object vào thư mục scene — chỉ cần một round-trip
   const loadImages = useCallback(async () => {
     try {
-      const response = await fetch(`/api/scenes/${scene.id}/reference-images`);
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
-      setImages(payload.images ?? []);
+      const payload = await listSceneReferenceImages(scene.id);
+      setImages(payload.images);
     } catch (error) {
       addToast("error", error instanceof Error ? error.message : String(error));
     } finally {
@@ -66,44 +72,20 @@ export function InitialImageManager({
   useEffect(() => {
     setLoading(true);
     void loadImages();
-  }, [loadImages]);
+  }, [loadImages, objectReferenceKey]);
 
-  const selectImage = async (imagePath: string) => {
-    if (busyPath || disabled) return;
-    setBusyPath(imagePath);
-    try {
-      const response = await fetch(`/api/scenes/${scene.id}/reference-images`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: imagePath }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
-      setImages((current) => current.map((image) => ({ ...image, selected: image.path === imagePath })));
-      addToast("success", t("canvas.referenceImageSelected"));
-      onSceneUpdate();
-    } catch (error) {
-      addToast("error", error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusyPath(null);
-    }
-  };
+  useEffect(() => subscribeToSceneReferenceImageChanges((sceneId) => {
+    if (sceneId === scene.id) void loadImages();
+  }), [scene.id, loadImages]);
 
   const deleteImage = async (imagePath: string) => {
     if (busyPath || disabled) return;
     setBusyPath(imagePath);
-    const wasSelected = images.some((image) => image.path === imagePath && image.selected);
     try {
-      const response = await fetch(`/api/scenes/${scene.id}/reference-images`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: imagePath }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
+      await deleteSceneReferenceImage(scene.id, imagePath);
       setImages((current) => current.filter((image) => image.path !== imagePath));
       if (previewPath === imagePath) setPreviewPath(null);
-      if (wasSelected) onSceneUpdate();
+      onSceneUpdate();
     } catch (error) {
       addToast("error", error instanceof Error ? error.message : String(error));
     } finally {
@@ -114,24 +96,18 @@ export function InitialImageManager({
   const uploadImages = async (files: File[]) => {
     if (!files.length || uploading || disabled) return;
     setUploading(true);
-    let uploadedCount = 0;
-    let uploadError: Error | null = null;
     try {
-      for (const file of files) {
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
-          const response = await fetch(`/api/scenes/${scene.id}/reference-images`, {
-            method: "POST",
-            body: formData,
-          });
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
-          uploadedCount += 1;
-        } catch (error) {
-          uploadError ??= error instanceof Error ? error : new Error(String(error));
-        }
-      }
+      // Các file độc lập nhau — upload song song thay vì cộng dồn từng round-trip
+      const results = await Promise.allSettled(
+        files.map((file) => uploadSceneReferenceImage(scene.id, file))
+      );
+      const uploadedCount = results.filter((result) => result.status === "fulfilled").length;
+      const firstFailure = results.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected"
+      );
+      const uploadError = firstFailure
+        ? firstFailure.reason instanceof Error ? firstFailure.reason : new Error(String(firstFailure.reason))
+        : null;
       if (uploadedCount > 0) {
         await loadImages();
         addToast("success", t("canvas.referenceImageUploaded", { count: uploadedCount }));
@@ -204,55 +180,16 @@ export function InitialImageManager({
                   flex: "0 0 96px",
                   overflow: "hidden",
                   position: "relative",
-                  border: image.selected ? "1.5px solid var(--accent)" : "0.5px solid var(--border)",
+                  border: "0.5px solid var(--border)",
                   borderRadius: 6,
                   background: "var(--bg2)",
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => selectImage(image.path)}
-                  disabled={busy || disabled}
-                  aria-pressed={image.selected}
-                  title={image.selected ? t("canvas.selectedForVideo") : t("canvas.selectForVideo")}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    height: "100%",
-                    padding: 0,
-                    border: 0,
-                    background: "transparent",
-                    cursor: busy || disabled ? "not-allowed" : "pointer",
-                    color: "inherit",
-                  }}
-                >
-                  <img
-                    src={`/api/files/${image.path}`}
-                    alt={t("canvas.initialReferenceImage")}
-                    style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </button>
-
-                {image.selected && !busy && (
-                  <span
-                    title={t("canvas.selectedForVideo")}
-                    style={{
-                      position: "absolute",
-                      left: 4,
-                      bottom: 4,
-                      width: 18,
-                      height: 18,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 4,
-                      background: "var(--accent)",
-                      color: "#000",
-                    }}
-                  >
-                    <IconCheck size={12} stroke={2.5} />
-                  </span>
-                )}
+                <img
+                  src={`/api/files/${image.path}`}
+                  alt={t("canvas.initialReferenceImage")}
+                  style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+                />
                 {busy && (
                   <span style={{ position: "absolute", left: 5, bottom: 5, color: "var(--accent)" }}>
                     <IconLoader2 size={14} className="loading-spinner" />
@@ -267,6 +204,7 @@ export function InitialImageManager({
                   >
                     <IconMaximize size={11} />
                   </MediaActionButton>
+                  <DownloadImageButton imagePath={image.path} size={11} disabled={busy} />
                   <MediaActionButton
                     label={t("common.delete")}
                     onClick={() => deleteImage(image.path)}

@@ -35,7 +35,8 @@ export async function POST(
         name: object.name,
         type: object.type.toLowerCase(),
         description_en: object.descriptionEn,
-      }))
+      })),
+      { provider: body.provider }
     );
     const counts = await prisma.$transaction((tx) =>
       importEnrichment(tx, params.episodeId, episode.filmId, analysis)

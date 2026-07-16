@@ -1,14 +1,20 @@
 import fs from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { storageRelative } from "@/lib/storage";
+import { toErrorMessage } from "@/lib/utils/errors";
 
 const AGNES_BASE_URL = (process.env.AGNES_AI_BASE_URL ?? "https://apihub.agnes-ai.com/v1").replace(/\/+$/, "");
 const AGNES_API_KEY = process.env.AGNES_AI_API_KEY ?? "";
+const AGNES_TEXT_MODEL = process.env.AGNES_AI_TEXT_MODEL ?? "agnes-2.0-flash";
 const AGNES_IMAGE_MODEL = process.env.AGNES_AI_IMAGE_MODEL ?? "agnes-image-2.1-flash";
 const AGNES_VIDEO_MODEL = process.env.AGNES_AI_VIDEO_MODEL ?? "agnes-video-v2.0";
+const AGNES_PUBLIC_MEDIA_BASE_URL = (process.env.AGNES_PUBLIC_MEDIA_BASE_URL ?? "").replace(/\/+$/, "");
 
 /** Agnes chấp nhận ảnh tham chiếu cạnh dài tối đa ~1536px; ảnh lớn hơn làm phồng payload và có thể bị từ chối */
 const REFERENCE_MAX_EDGE = 1536;
+const VISION_MAX_EDGE = 1024;
 
 const MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
@@ -46,6 +52,65 @@ async function fileToDataUri(absPath: string): Promise<string> {
   return `data:${mime};base64,${buffer.toString("base64")}`;
 }
 
+async function fileToVisionDataUri(absPath: string): Promise<string> {
+  try {
+    const buffer = await sharp(absPath)
+      .rotate()
+      .resize({
+        width: VISION_MAX_EDGE,
+        height: VISION_MAX_EDGE,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    return `data:image/jpeg;base64,${buffer.toString("base64")}`;
+  } catch {
+    return fileToDataUri(absPath);
+  }
+}
+
+function compactUploadResponse(text: string): string {
+  if (/<!doctype|<html|<style|:root\s*\{/i.test(text)) {
+    return "dịch vụ upload trả về trang lỗi";
+  }
+  return text
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+}
+
+function publicStorageUrl(absPath: string): string | null {
+  if (!AGNES_PUBLIC_MEDIA_BASE_URL) return null;
+  try {
+    const baseUrl = new URL(AGNES_PUBLIC_MEDIA_BASE_URL);
+    if (!["http:", "https:"].includes(baseUrl.protocol)) return null;
+    if (["localhost", "127.0.0.1", "0.0.0.0"].includes(baseUrl.hostname)) return null;
+    const encodedPath = storageRelative(absPath)
+      .split(path.sep)
+      .map(encodeURIComponent)
+      .join("/");
+    return `${baseUrl.origin}${baseUrl.pathname.replace(/\/$/, "")}/api/files/${encodedPath}`;
+  } catch {
+    return null;
+  }
+}
+
+async function retryUpload(upload: () => Promise<string>): Promise<string> {
+  let firstError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await upload();
+    } catch (error) {
+      firstError ??= error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 750));
+    }
+  }
+  throw firstError;
+}
+
 async function uploadToLitterbox(buffer: Buffer, filename: string, mime: string): Promise<string> {
   const form = new FormData();
   form.append("reqtype", "fileupload");
@@ -58,7 +123,7 @@ async function uploadToLitterbox(buffer: Buffer, filename: string, mime: string)
   });
   const text = (await res.text().catch(() => "")).trim();
   if (!res.ok || !/^https?:\/\//i.test(text)) {
-    throw new Error(`litterbox: ${res.status} ${text.slice(0, 200)}`);
+    throw new Error(`HTTP ${res.status}${compactUploadResponse(text) ? `: ${compactUploadResponse(text)}` : ""}`);
   }
   return text;
 }
@@ -66,7 +131,7 @@ async function uploadToLitterbox(buffer: Buffer, filename: string, mime: string)
 async function uploadToUguu(buffer: Buffer, filename: string, mime: string): Promise<string> {
   const form = new FormData();
   form.append("files[]", new Blob([new Uint8Array(buffer)], { type: mime }), filename);
-  const res = await fetch("https://uguu.se/upload", {
+  const res = await fetch("https://uguu.se/upload.php", {
     method: "POST",
     body: form,
     signal: AbortSignal.timeout(60000),
@@ -74,9 +139,43 @@ async function uploadToUguu(buffer: Buffer, filename: string, mime: string): Pro
   const data = await res.json().catch(() => null);
   const url = data?.files?.[0]?.url;
   if (!res.ok || typeof url !== "string" || !/^https?:\/\//i.test(url)) {
-    throw new Error(`uguu: ${res.status} ${JSON.stringify(data ?? "").slice(0, 200)}`);
+    const detail = typeof data?.description === "string"
+      ? data.description
+      : JSON.stringify(data ?? "").slice(0, 160);
+    throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
   }
   return url;
+}
+
+async function uploadToFilebin(buffer: Buffer, filename: string, mime: string): Promise<string> {
+  const binId = `story-forge-${randomUUID()}`;
+  const fileUrl = `https://filebin.net/${encodeURIComponent(binId)}/${encodeURIComponent(filename)}`;
+  const res = await fetch(fileUrl, {
+    method: "POST",
+    headers: { "Content-Type": mime, Accept: "application/json" },
+    body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${compactUploadResponse(await res.text().catch(() => ""))}`);
+  }
+
+  // Filebin's public URL redirects to a short-lived S3 URL. Agnes does not reliably follow
+  // hosting-page redirects, so resolve it here and submit the direct image URL.
+  const redirect = await fetch(fileUrl, {
+    redirect: "manual",
+    headers: { Accept: "image/*", "User-Agent": "curl/8.0" },
+    signal: AbortSignal.timeout(30000),
+  });
+  const directUrl = redirect.headers.get("location");
+  if (redirect.status < 300 || redirect.status >= 400 || !directUrl) {
+    throw new Error(`không lấy được URL ảnh trực tiếp (HTTP ${redirect.status})`);
+  }
+  const parsedUrl = new URL(directUrl);
+  if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "storage.filebin.net") {
+    throw new Error("dịch vụ upload trả về URL không hợp lệ");
+  }
+  return directUrl;
 }
 
 /** GET thử URL vừa upload: một số host trả về trang HTML thay vì file ảnh, Agnes fetch về sẽ lỗi */
@@ -91,31 +190,112 @@ async function assertUrlServesImage(url: string): Promise<void> {
 
 /**
  * Video API của Agnes chỉ nhận URL http(s) công khai — KHÔNG nhận base64/data-URI như API ảnh.
- * Ảnh local được resize ≤1536px rồi upload lên hosting tạm (litterbox 24h, fallback uguu ~3h)
- * để lấy URL public cho Agnes fetch về. Lưu ý: ảnh sẽ tạm thời truy cập được công khai qua link đó.
+ * Ảnh local được resize ≤1536px. Production ưu tiên URL public của chính ứng dụng;
+ * localhost dùng hosting tạm để Agnes fetch ảnh. Ảnh upload tạm có thể truy cập công khai qua URL đó.
  */
 export async function uploadReferenceImageToCloud(absPath: string): Promise<string> {
+  const ownPublicUrl = publicStorageUrl(absPath);
+  if (ownPublicUrl) {
+    try {
+      await assertUrlServesImage(ownPublicUrl);
+      return ownPublicUrl;
+    } catch {
+      // Domain có thể chưa public route storage; tiếp tục qua các host tạm.
+    }
+  }
+
   const { buffer, mime, ext } = await referenceImageBuffer(absPath);
   const filename = `${path.basename(absPath, path.extname(absPath))}${ext}`;
   const errors: string[] = [];
   for (const [name, upload] of [
-    ["litterbox", uploadToLitterbox],
+    ["filebin", uploadToFilebin],
     ["uguu", uploadToUguu],
+    ["litterbox", uploadToLitterbox],
   ] as const) {
     try {
-      const url = await upload(buffer, filename, mime);
+      const url = await retryUpload(() => upload(buffer, filename, mime));
       await assertUrlServesImage(url);
       return url;
     } catch (e) {
-      errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
+      const message = e instanceof Error ? e.message : String(e);
+      errors.push(`${name}: ${message === "fetch failed" ? "không thể kết nối" : message}`);
     }
   }
-  throw new Error(`Upload ảnh tham chiếu lên cloud thất bại — ${errors.join("; ")}`);
+  throw new Error(
+    `Không thể chuẩn bị ảnh tham chiếu cho Agnes AI. ${errors.join("; ")}. `
+    + "Khi deploy, hãy cấu hình AGNES_PUBLIC_MEDIA_BASE_URL bằng domain public của ứng dụng."
+  );
 }
 
 function authHeaders(): Record<string, string> {
   if (!AGNES_API_KEY) throw new Error("AGNES_AI_API_KEY chưa được cấu hình trong .env");
   return { Authorization: `Bearer ${AGNES_API_KEY}`, "Content-Type": "application/json" };
+}
+
+/** Convert visual content references into a video prompt without treating them as video keyframes. */
+export async function agnesGroundVideoPrompt(
+  scenePrompt: string,
+  referenceImagePaths: string[]
+): Promise<string> {
+  if (referenceImagePaths.length === 0) return scenePrompt;
+  const imageDataUris = await Promise.all(
+    referenceImagePaths.slice(0, 4).map((imagePath) => fileToVisionDataUri(imagePath))
+  );
+  const content = [
+    {
+      type: "text",
+      text: `Write one production-ready English video-generation prompt grounded in the supplied reference images.
+
+The images are visual source material, not chronological keyframes. Preserve their subjects, identities, environment, architecture, objects, materials, colors, and recognizable details. Build the requested action naturally around that visual content. Do not introduce a different location or replace the referenced subjects. Resolve conflicts by treating the images as visual truth while keeping compatible actions and camera direction from the scene request.
+
+Return only the final prompt as one paragraph, with no heading or explanation.
+
+Scene request:
+${scenePrompt}`,
+    },
+    ...imageDataUris.map((url) => ({ type: "image_url", image_url: { url } })),
+  ];
+  const requestBody = JSON.stringify({
+    model: AGNES_TEXT_MODEL,
+    messages: [
+      { role: "system", content: "You are a visual continuity director for AI video production." },
+      { role: "user", content },
+    ],
+    temperature: 0.2,
+    max_tokens: 900,
+  });
+  let response: Response | undefined;
+  let responseDetail = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch(`${AGNES_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: requestBody,
+        signal: AbortSignal.timeout(120000),
+      });
+      if (response.ok) break;
+      responseDetail = await response.text().catch(() => "");
+      if (![500, 502, 503, 504].includes(response.status)) break;
+    } catch (error) {
+      responseDetail = toErrorMessage(error);
+      if (attempt === 2) break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+  }
+  if (!response?.ok) {
+    const status = response?.status ? `HTTP ${response.status}` : "network error";
+    const upstreamDetail = /cannot connect to host|connection reset/i.test(responseDetail)
+      ? "Agnes upstream không thể tải ảnh"
+      : compactUploadResponse(responseDetail) || "không có chi tiết";
+    throw new Error(`Agnes AI phân tích ảnh tham chiếu thất bại sau 3 lần thử (${status}): ${upstreamDetail}`);
+  }
+  const data = await response.json();
+  const groundedPrompt = data?.choices?.[0]?.message?.content;
+  if (typeof groundedPrompt !== "string" || !groundedPrompt.trim()) {
+    throw new Error("Agnes AI reference analysis returned no prompt");
+  }
+  return groundedPrompt.trim();
 }
 
 export interface AgnesImageParams {
@@ -197,15 +377,17 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
   if (params.negativePrompt) body.negative_prompt = params.negativePrompt;
   if (params.seed !== undefined && params.seed >= 0) body.seed = params.seed;
 
-  const urls: string[] = [];
-  const roles: string[] = [];
-  for (const ref of (params.images ?? []).slice(0, MAX_VIDEO_REFERENCE_IMAGES)) {
-    const raw = ref.pathOrUrl?.trim();
-    if (!raw) continue;
-    const url = /^https?:\/\//i.test(raw) ? raw : await uploadReferenceImageToCloud(raw);
-    urls.push(url);
-    roles.push(ref.role ?? "");
-  }
+  // Upload các ảnh độc lập nhau — chạy song song để không cộng dồn độ trễ (mỗi ảnh gồm resize + POST + verify)
+  const refs = (params.images ?? [])
+    .slice(0, MAX_VIDEO_REFERENCE_IMAGES)
+    .flatMap((ref) => {
+      const raw = ref.pathOrUrl?.trim();
+      return raw ? [{ raw, role: ref.role ?? "" }] : [];
+    });
+  const urls = await Promise.all(refs.map(({ raw }) =>
+    /^https?:\/\//i.test(raw) ? Promise.resolve(raw) : uploadReferenceImageToCloud(raw)
+  ));
+  const roles = refs.map(({ role }) => role);
   if (urls.length === 1) {
     body.image = urls[0];
   } else if (urls.length > 1) {
@@ -256,10 +438,12 @@ export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVide
   const data = await res.json();
   // Agnes có thể trả error dạng object {code, message} — ép về string để lưu DB không bị Prisma từ chối
   const rawError = data.error ?? data.message;
-  const error = rawError == null
-    ? undefined
-    : typeof rawError === "string" ? rawError : JSON.stringify(rawError);
-  return { status: data.status, progress: data.progress ?? 0, url: data.url, error };
+  return {
+    status: data.status,
+    progress: data.progress ?? 0,
+    url: data.url,
+    error: rawError == null ? undefined : toErrorMessage(rawError),
+  };
 }
 
 export async function agnesDownload(url: string): Promise<Buffer> {

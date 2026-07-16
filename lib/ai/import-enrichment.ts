@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { EnrichmentResult } from "./enrichment";
+import { getSceneCanvasPosition } from "@/lib/canvas/scene-layout";
 
 export async function importEnrichment(
   tx: Prisma.TransactionClient,
@@ -24,12 +25,14 @@ export async function importEnrichment(
   const createdSceneIds: string[] = [];
   for (let index = 0; index < analysis.scenes.length; index += 1) {
     const scene = analysis.scenes[index];
+    const canvasPosition = getSceneCanvasPosition(index);
     const created = await tx.scene.create({
       data: {
         episodeId,
         order: index,
         title: scene.title,
         promptEn: scene.prompt_en,
+        negativePrompt: scene.negative_prompt,
         cameraDirection: scene.camera_direction,
         shotType: scene.shot_type.toUpperCase() as
           | "WIDE"
@@ -40,8 +43,8 @@ export async function importEnrichment(
         mood: scene.mood,
         lightingNote: scene.lighting_note,
         transitionsTo: [],
-        canvasX: index * 200,
-        canvasY: 0,
+        canvasX: canvasPosition.x,
+        canvasY: canvasPosition.y,
       },
     });
     sceneMap.set(scene.id, created.id);

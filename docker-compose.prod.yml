@@ -1,0 +1,52 @@
+services:
+  app:
+    container_name: app_${CONTAINER_NAME}
+    image: story-forge-v2:production
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://storyforge:storyforge@db:5432/storyforge
+      AI_BASE_URL: http://host.docker.internal:20128/v1
+      COMFYUI_URL: http://host.docker.internal:8188
+      COMFYUI_WS_URL: ws://host.docker.internal:8188/ws
+    depends_on:
+      db:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./storage:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/config || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  db:
+    container_name: db_${CONTAINER_NAME}
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: storyforge
+      POSTGRES_USER: storyforge
+      POSTGRES_PASSWORD: storyforge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storyforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+

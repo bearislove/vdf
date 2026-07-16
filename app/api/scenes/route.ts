@@ -17,17 +17,48 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { episodeId, title, promptEn, order } = await req.json();
+  const { episodeId, title, promptEn, negativePrompt, order, canvasX, canvasY, connectPrevious } = await req.json();
   if (!episodeId) return NextResponse.json({ error: "episodeId required" }, { status: 400 });
 
-  const count = await prisma.scene.count({ where: { episodeId } });
-  const scene = await prisma.scene.create({
-    data: {
-      episodeId,
-      title: title?.trim() ?? "",
-      promptEn: promptEn?.trim() ?? "",
-      order: order ?? count,
-    },
+  const scene = await prisma.$transaction(async (tx) => {
+    const highestOrder = await tx.scene.aggregate({
+      where: { episodeId },
+      _max: { order: true },
+    });
+    const sceneOrder = Number.isInteger(order) && order >= 0
+      ? order
+      : (highestOrder._max.order ?? -1) + 1;
+    const previousScene = connectPrevious === true
+      ? await tx.scene.findFirst({
+          where: { episodeId, order: { lt: sceneOrder } },
+          orderBy: { order: "desc" },
+          select: { id: true, transitionsTo: true },
+        })
+      : null;
+
+    const created = await tx.scene.create({
+      data: {
+        episodeId,
+        title: title?.trim() ?? "",
+        promptEn: promptEn?.trim() ?? "",
+        negativePrompt: negativePrompt?.trim() ?? "",
+        order: sceneOrder,
+        ...(typeof canvasX === "number" && { canvasX }),
+        ...(typeof canvasY === "number" && { canvasY }),
+      },
+    });
+
+    if (previousScene) {
+      const existingTransitions = Array.isArray(previousScene.transitionsTo)
+        ? previousScene.transitionsTo.filter((id): id is string => typeof id === "string")
+        : [];
+      await tx.scene.update({
+        where: { id: previousScene.id },
+        data: { transitionsTo: Array.from(new Set([...existingTransitions, created.id])) },
+      });
+    }
+
+    return created;
   });
   return NextResponse.json(scene, { status: 201 });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeStoredVariantReferenceImages } from "@/lib/video/reference-image-dedup";
 
 export async function GET(_: NextRequest, { params }: { params: { sceneId: string } }) {
   const scene = await prisma.scene.findUnique({
@@ -11,6 +12,10 @@ export async function GET(_: NextRequest, { params }: { params: { sceneId: strin
     },
   });
   if (!scene) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await normalizeStoredVariantReferenceImages([
+    ...scene.videoVariants,
+    ...(scene.selectedVideo ? [scene.selectedVideo] : []),
+  ]);
   return NextResponse.json(scene);
 }
 
@@ -22,6 +27,7 @@ export async function PUT(req: NextRequest, { params }: { params: { sceneId: str
       title: body.title,
       promptEn: body.promptEn,
       promptEnOverride: body.promptEnOverride,
+      negativePrompt: body.negativePrompt,
       cameraDirection: body.cameraDirection,
       shotType: body.shotType,
       mood: body.mood,

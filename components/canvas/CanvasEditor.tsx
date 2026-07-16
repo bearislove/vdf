@@ -13,7 +13,9 @@ import ReactFlow, {
   type Edge,
   type Connection,
   type OnSelectionChangeParams,
+  type ReactFlowInstance,
   MarkerType,
+  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { SceneNode } from "./SceneNode";
@@ -23,6 +25,10 @@ import { apiPut, apiPost } from "@/lib/utils/api";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
+import { getSceneCanvasPosition, SCENES_PER_ROW } from "@/lib/canvas/scene-layout";
+import { useAppStore } from "@/store/useAppStore";
+import { useTranslation } from "@/hooks/useTranslation";
+import { notifySceneReferenceImagesChanged } from "@/lib/utils/scene-reference-images";
 
 const nodeTypes = {
   sceneNode: SceneNode,
@@ -63,8 +69,19 @@ function buildNodes(
 
   for (const scene of scenes) {
     const s = scene as SceneWithRelations;
-    const x = scene.canvasX || scene.order * 200;
-    const y = scene.canvasY || 0;
+    const defaultPosition = getSceneCanvasPosition(scene.order);
+    const isUnpositioned = scene.order > 0 && scene.canvasX === 0 && scene.canvasY === 0;
+    const x = isUnpositioned ? defaultPosition.x : scene.canvasX;
+    const y = isUnpositioned ? defaultPosition.y : scene.canvasY;
+    const row = Math.floor(scene.order / SCENES_PER_ROW);
+    const offsetInRow = scene.order % SCENES_PER_ROW;
+    const flowsLeftToRight = row % 2 === 0;
+    const targetPosition = offsetInRow === 0 && scene.order > 0
+      ? Position.Top
+      : flowsLeftToRight ? Position.Left : Position.Right;
+    const sourcePosition = offsetInRow === SCENES_PER_ROW - 1
+      ? Position.Bottom
+      : flowsLeftToRight ? Position.Right : Position.Left;
 
     // Scene node
     nodes.push({
@@ -81,6 +98,8 @@ function buildNodes(
         onRemoveLink: (linkId: string) => onRemoveLink(scene.id, linkId),
         onDropObject: (objectId: string) => onDropObject(scene.id, objectId),
         onDelete: () => onDeleteScene(scene.id),
+        targetPosition,
+        sourcePosition,
       },
       selected: scene.id === selectedSceneId,
     });
@@ -123,7 +142,11 @@ type DeleteTarget =
 
 export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditorProps) {
   const { selectedSceneId, selectScene } = useCanvasStore();
+  const { addToast } = useAppStore();
+  const { t } = useTranslation();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const flowRef = useRef<ReactFlowInstance | null>(null);
+  const [isArranging, setIsArranging] = useState(false);
 
   // ── Mutable ref holding latest callbacks — keeps edge/node data stable ────
   const cbRef = useRef({ scenes, onScenesChange });
@@ -138,9 +161,12 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   const handleDropObject = useCallback(async (sceneId: string, objectId: string) => {
     try {
       await apiPost(`/api/scenes/${sceneId}/links`, { objectId, role: "present" });
+      notifySceneReferenceImagesChanged(sceneId);
       cbRef.current.onScenesChange();
-    } catch { /* already linked */ }
-  }, []);
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    }
+  }, [addToast]);
 
   const execDeleteScene = useCallback(async (sceneId: string) => {
     const { scenes: sc, onScenesChange: refresh } = cbRef.current;
@@ -165,8 +191,16 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   }, []);
 
   const handleAddScene = useCallback(async () => {
-    const maxX = cbRef.current.scenes.reduce((m, s) => Math.max(m, s.canvasX ?? 0), 0);
-    await apiPost("/api/scenes", { episodeId, title: "", canvasX: maxX + 220, canvasY: 0 });
+    const nextOrder = cbRef.current.scenes.reduce((max, scene) => Math.max(max, scene.order), -1) + 1;
+    const canvasPosition = getSceneCanvasPosition(nextOrder);
+    await apiPost("/api/scenes", {
+      episodeId,
+      title: "",
+      order: nextOrder,
+      canvasX: canvasPosition.x,
+      canvasY: canvasPosition.y,
+      connectPrevious: true,
+    });
     cbRef.current.onScenesChange();
   }, [episodeId]);
 
@@ -243,6 +277,37 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  const handleArrangeScenes = useCallback(async () => {
+    if (isArranging || cbRef.current.scenes.length === 0) return;
+    setIsArranging(true);
+
+    try {
+      const result = await apiPut<{ scenes: Array<{ id: string; x: number; y: number }> }>(
+        `/api/episodes/${episodeId}/scene-layout`,
+        {}
+      );
+      const positions = new Map(result.scenes.map((scene) => [scene.id, scene]));
+
+      setNodes((currentNodes) =>
+        currentNodes.map((node) => {
+          const position = positions.get(node.id);
+          return position
+            ? { ...node, position: { x: position.x, y: position.y } }
+            : node;
+        })
+      );
+      cbRef.current.onScenesChange();
+      requestAnimationFrame(() => {
+        flowRef.current?.fitView({ padding: 0.2, duration: 400 });
+      });
+      addToast("success", t("canvas.scenesArranged"));
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsArranging(false);
+    }
+  }, [addToast, episodeId, isArranging, setNodes, t]);
 
   // Rebuild nodes only when scene data changes — preserve React Flow positions
   useEffect(() => {
@@ -347,6 +412,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
       )}
 
       <ReactFlow
+        onInit={(instance) => { flowRef.current = instance; }}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -379,30 +445,49 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
           }}
         />
         <Panel position="bottom-right">
-          <button
-            onClick={handleAddScene}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "7px 14px",
-              borderRadius: 7,
-              border: "0.5px solid var(--border2)",
-              background: "var(--bg1)",
-              color: "var(--text1)",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 500,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-              transition: "background 150ms",
-            }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--bg2)")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "var(--bg1)")}
-          >
-            <span style={{ fontSize: 14 }}>+</span> Thêm cảnh
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              onClick={handleArrangeScenes}
+              disabled={isArranging || scenes.length === 0}
+              title={t("canvas.arrangeScenes")}
+              className="canvas-action-button"
+            >
+              <span
+                aria-hidden="true"
+                style={{ fontSize: 14, animation: isArranging ? "spin 1s linear infinite" : "none" }}
+              >
+                {isArranging ? "↻" : "▦"}
+              </span>
+              {isArranging ? t("canvas.arrangingScenes") : t("canvas.arrangeScenes")}
+            </button>
+            <button onClick={handleAddScene} className="canvas-action-button">
+              <span aria-hidden="true" style={{ fontSize: 14 }}>+</span>
+              {t("canvas.addScene")}
+            </button>
+          </div>
         </Panel>
       </ReactFlow>
+      <style>{`
+        .canvas-action-button {
+          min-height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 7px 12px;
+          border: 0.5px solid var(--border2);
+          border-radius: 7px;
+          background: var(--bg1);
+          color: var(--text1);
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+          transition: background 150ms, opacity 150ms;
+        }
+        .canvas-action-button:hover:not(:disabled) { background: var(--bg2); }
+        .canvas-action-button:disabled { cursor: default; opacity: 0.55; }
+      `}</style>
     </div>
   );
 }

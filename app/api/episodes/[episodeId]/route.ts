@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeStoredVariantReferenceImages } from "@/lib/video/reference-image-dedup";
 
 export async function GET(_: NextRequest, { params }: { params: { episodeId: string } }) {
   const episode = await prisma.episode.findUnique({
@@ -16,6 +17,12 @@ export async function GET(_: NextRequest, { params }: { params: { episodeId: str
     },
   });
   if (!episode) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await normalizeStoredVariantReferenceImages(
+    episode.scenes.flatMap((scene) => [
+      ...scene.videoVariants,
+      ...(scene.selectedVideo ? [scene.selectedVideo] : []),
+    ])
+  );
   return NextResponse.json(episode);
 }
 

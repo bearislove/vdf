@@ -1,13 +1,29 @@
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
-import type { VideoVariant } from "@/types/video";
 
-/** Client/server shared provider identifier (lowercase; Prisma enum GenerationProvider is the uppercase twin) */
+/** Client/server shared provider identifiers. */
 export type GenerationProviderName = "comfyui" | "agnes";
+export type TextProviderName = "openai" | "ollama" | "agnes";
+
+export interface TextProviderCapabilities {
+  chatCompletion: boolean;
+}
+
+export interface ImageProviderCapabilities {
+  referenceImages: boolean;
+  maxReferenceImages: number;
+}
+
+export interface VideoProviderCapabilities {
+  referenceImages: boolean;
+  maxReferenceImages: number;
+  recovery: boolean;
+}
 
 // ─── LLM ───────────────────────────────────────────────────────────────────────
 
 export interface LLMProvider {
+  readonly name: TextProviderName;
   chatComplete(system: string, user: string, opts?: { temperature?: number }): Promise<string>;
 }
 
@@ -50,7 +66,9 @@ export interface VideoGenContext {
   episodeId: string;
   /** Absolute path locked when the variant is created; all providers must use this exact first frame. */
   firstFrameImagePath?: string;
-  previousVariant?: Pick<VideoVariant, "lastFramePath"> | null;
+  firstFrameSource: "none" | "initial_reference" | "previous_scene";
+  /** Visual content references from Initial reference image; never first/last keyframes. */
+  contentReferenceImagePaths: string[];
 }
 
 export interface VideoSubmittedMeta {
@@ -59,6 +77,8 @@ export interface VideoSubmittedMeta {
   comfyPromptId?: string;
   comfyClientId?: string;
   workflowSnapshot?: Record<string, unknown>;
+  /** Storage-relative paths của toàn bộ ảnh tham chiếu thực tế gửi cho provider (first frame + object refs) */
+  referenceImagePaths?: string[];
 }
 
 export interface VideoProgress {

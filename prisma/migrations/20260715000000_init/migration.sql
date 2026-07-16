@@ -11,13 +11,13 @@ CREATE TYPE "ShotType" AS ENUM ('WIDE', 'MEDIUM', 'CLOSE', 'AERIAL', 'POV');
 CREATE TYPE "VideoStatus" AS ENUM ('QUEUED', 'GENERATING_IMAGE', 'GENERATING_VIDEO', 'DONE', 'FAILED');
 
 -- CreateEnum
-CREATE TYPE "JobType" AS ENUM ('FLUX2_REF_IMAGE', 'FLUX2_COMPOSITE', 'LTX_VIDEO', 'WAN_VIDEO', 'EXTRACT_LAST_FRAME');
+CREATE TYPE "JobType" AS ENUM ('FLUX2_REF_IMAGE', 'FLUX2_COMPOSITE', 'LTX_VIDEO', 'WAN_VIDEO', 'EXTRACT_LAST_FRAME', 'AGNES_IMAGE', 'AGNES_VIDEO');
 
 -- CreateEnum
 CREATE TYPE "JobStatus" AS ENUM ('QUEUED', 'RUNNING', 'DONE', 'FAILED', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "GenerationStrategy" AS ENUM ('T2V', 'I2V_SINGLE', 'I2V_COMPOSITE', 'IC_LORA');
+CREATE TYPE "GenerationProvider" AS ENUM ('COMFYUI', 'AGNES');
 
 -- CreateTable
 CREATE TABLE "films" (
@@ -77,6 +77,7 @@ CREATE TABLE "scenes" (
     "title" TEXT NOT NULL DEFAULT '',
     "prompt_en" TEXT NOT NULL DEFAULT '',
     "prompt_en_override" TEXT,
+    "negative_prompt" TEXT NOT NULL DEFAULT '',
     "camera_direction" TEXT NOT NULL DEFAULT '',
     "shot_type" "ShotType" NOT NULL DEFAULT 'MEDIUM',
     "mood" TEXT NOT NULL DEFAULT '',
@@ -84,10 +85,8 @@ CREATE TABLE "scenes" (
     "transitions_to" JSONB NOT NULL DEFAULT '[]',
     "composite_image_path" TEXT,
     "selected_video_id" TEXT,
-    "video_model" TEXT NOT NULL DEFAULT '',
     "video_params" JSONB NOT NULL DEFAULT '{}',
     "use_last_frame_chaining" BOOLEAN NOT NULL DEFAULT true,
-    "strategy_override" "GenerationStrategy",
     "canvas_x" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "canvas_y" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -115,6 +114,8 @@ CREATE TABLE "video_variants" (
     "workflow_snapshot" JSONB NOT NULL DEFAULT '{}',
     "comfy_prompt_id" TEXT,
     "comfy_client_id" TEXT,
+    "provider" "GenerationProvider" NOT NULL DEFAULT 'AGNES',
+    "external_job_id" TEXT,
     "status" "VideoStatus" NOT NULL DEFAULT 'QUEUED',
     "status_message" TEXT NOT NULL DEFAULT '',
     "error_detail" TEXT,
@@ -122,6 +123,7 @@ CREATE TABLE "video_variants" (
     "progress_step" INTEGER NOT NULL DEFAULT 0,
     "progress_total" INTEGER NOT NULL DEFAULT 0,
     "composite_image_path" TEXT,
+    "reference_image_paths" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "video_path" TEXT,
     "last_frame_path" TEXT,
     "thumbnail_path" TEXT,
@@ -144,9 +146,11 @@ CREATE TABLE "generation_jobs" (
     "object_id" TEXT,
     "variant_id" TEXT,
     "job_type" "JobType" NOT NULL,
+    "provider" "GenerationProvider" NOT NULL DEFAULT 'AGNES',
     "comfy_prompt_id" TEXT,
     "comfy_client_id" TEXT,
-    "comfy_server_url" TEXT NOT NULL,
+    "comfy_server_url" TEXT,
+    "external_job_id" TEXT,
     "status" "JobStatus" NOT NULL DEFAULT 'QUEUED',
     "current_node" TEXT,
     "progress_step" INTEGER NOT NULL DEFAULT 0,

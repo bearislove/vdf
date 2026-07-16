@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
+import { ensureCompositeImageSelected } from "@/lib/scene-composite-selection";
+import { cloneLinkedObjectReferences } from "@/lib/scene-reference-clones";
 import {
   ensureDir,
+  listSceneCompositeImages,
   resolveStoragePathInside,
   sceneCompositeImagesDir,
   storageRelative,
 } from "@/lib/storage";
 
-const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 const IMAGE_MIME_EXTENSIONS: Record<string, string> = {
   "image/jpeg": ".jpg",
   "image/png": ".png",
@@ -46,23 +48,15 @@ export async function GET(
   const scene = await getScene(params.sceneId);
   if (!scene) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const directory = sceneCompositeImagesDir(scene.episode.filmId, scene.episodeId, scene.id);
-  ensureDir(directory);
-  const images = fs.readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
-    .map((entry) => {
-      const absolutePath = path.join(directory, entry.name);
-      const stat = fs.statSync(absolutePath);
-      const relativePath = storageRelative(absolutePath);
-      return {
-        path: relativePath,
-        createdAt: stat.mtime.toISOString(),
-        selected: relativePath === scene.compositeImagePath,
-      };
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Đồng bộ ảnh nhận dạng của object vào thư mục scene ngay lúc đọc — client không cần gọi clone riêng
+  await cloneLinkedObjectReferences(scene.id);
+  const images = listSceneCompositeImages(scene.episode.filmId, scene.episodeId, scene.id)
+    .map(({ absPath, mtimeMs }) => ({
+      path: storageRelative(absPath),
+      createdAt: new Date(mtimeMs).toISOString(),
+    }));
 
-  return NextResponse.json({ images, selectedPath: scene.compositeImagePath });
+  return NextResponse.json({ images });
 }
 
 export async function POST(
@@ -97,26 +91,11 @@ export async function POST(
     const absolutePath = path.join(directory, filename);
     fs.writeFileSync(absolutePath, buffer);
     const uploadedPath = storageRelative(absolutePath);
-    // Scene chưa chọn ảnh nào → chọn luôn ảnh vừa upload để dùng khi tạo video
-    await prisma.scene.updateMany({
-      where: { id: scene.id, compositeImagePath: null },
-      data: { compositeImagePath: uploadedPath },
-    });
+    await ensureCompositeImageSelected(scene, { filmId: scene.episode.filmId, episodeId: scene.episodeId }, uploadedPath);
     return NextResponse.json({ path: uploadedPath }, { status: 201 });
   }
 
-  const body = await req.json().catch(() => ({}));
-  const absolutePath = resolveStoragePathInside(body.path, directory);
-  if (!absolutePath || !fs.existsSync(absolutePath)) {
-    return NextResponse.json({ error: "Reference image not found" }, { status: 404 });
-  }
-
-  const selectedPath = storageRelative(absolutePath);
-  await prisma.scene.update({
-    where: { id: scene.id },
-    data: { compositeImagePath: selectedPath },
-  });
-  return NextResponse.json({ selectedPath });
+  return NextResponse.json({ error: "Expected an image upload" }, { status: 415 });
 }
 
 export async function DELETE(

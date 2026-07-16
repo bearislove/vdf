@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { IconLoader2, IconMovie } from "@tabler/icons-react";
 import { Topbar } from "@/components/layout/Topbar";
 import { ObjectPanel } from "@/components/canvas/ObjectPanel";
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
@@ -100,8 +101,8 @@ export default function EpisodePage({ params }: Props) {
         body: JSON.stringify({ filmId: params.filmId, episodeIds: [params.episodeId] }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Merge failed");
-      addToast("success", "Xuất video xong! Đang tải về...");
+      if (!res.ok) throw new Error(data.error ?? t("episode.exportFailed"));
+      addToast("success", t("episode.exportComplete"));
       const a = document.createElement("a");
       a.href = data.outputUrl;
       a.download = `${episode?.title ?? "episode"}.mp4`;
@@ -111,7 +112,7 @@ export default function EpisodePage({ params }: Props) {
     } finally {
       setMerging(false);
     }
-  }, [params.filmId, params.episodeId, episode?.title, addToast]);
+  }, [params.filmId, params.episodeId, episode?.title, addToast, t]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -129,7 +130,10 @@ export default function EpisodePage({ params }: Props) {
               disabled={merging}
               style={{ fontSize: 10 }}
             >
-              {merging ? "⟳ Đang xuất..." : "🎬 Xuất video tập"}
+              {merging
+                ? <IconLoader2 size={14} className="loading-spinner" aria-hidden="true" />
+                : <IconMovie size={14} aria-hidden="true" />}
+              {merging ? t("episode.exportingVideo") : t("episode.exportVideo")}
             </button>
           ) : undefined
         }

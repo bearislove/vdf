@@ -4,6 +4,7 @@ import { useState } from "react";
 import { IconEye, IconStar, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { MediaActionButton } from "./MediaActionButton";
+import { DownloadImageButton } from "./DownloadImageButton";
 
 export interface PhotoItem {
   path: string;
@@ -113,6 +114,7 @@ function PhotoCell({
               <IconEye size={14} />
             </MediaActionButton>
           )}
+          <DownloadImageButton imagePath={photo.path} size={14} />
           <MediaActionButton label={t("common.delete")} onClick={onDelete} tone="danger">
             <IconTrash size={14} />
           </MediaActionButton>

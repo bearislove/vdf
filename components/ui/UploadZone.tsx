@@ -10,6 +10,7 @@ interface UploadZoneProps {
   label?: string;
   hint?: string;
   loading?: boolean;
+  disabled?: boolean;
   loadingLabel?: string;
   className?: string;
   style?: React.CSSProperties;
@@ -22,25 +23,27 @@ export function UploadZone({
   label = "Kéo file vào đây",
   hint = "JPG PNG WEBP",
   loading = false,
+  disabled = false,
   loadingLabel = "Uploading...",
   className,
   style,
 }: UploadZoneProps) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inactive = loading || disabled;
 
   return (
     <>
       <button
         type="button"
         className={className}
-        onClick={() => { if (!loading) inputRef.current?.click(); }}
+        onClick={() => { if (!inactive) inputRef.current?.click(); }}
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files);
+          if (!inactive && e.dataTransfer.files?.length) onFiles(e.dataTransfer.files);
         }}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragOver={(e) => { e.preventDefault(); if (!inactive) setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         style={{
           width: "100%",
@@ -50,13 +53,13 @@ export function UploadZone({
           textAlign: "center",
           fontSize: 10,
           color: dragOver ? "var(--accent)" : "var(--text2)",
-          cursor: loading ? "not-allowed" : "pointer",
+          cursor: inactive ? "not-allowed" : "pointer",
           background: dragOver ? "rgba(255,156,42,0.05)" : "transparent",
           transition: "border-color 150ms, color 150ms, background 150ms",
-          opacity: loading ? 0.6 : 1,
+          opacity: inactive ? 0.6 : 1,
           ...style,
         }}
-        disabled={loading}
+        disabled={inactive}
       >
         {loading
           ? <IconLoader2 className="loading-spinner" size={14} style={{ marginRight: 5, verticalAlign: -2 }} />

@@ -15,6 +15,7 @@ import { variantDir, ensureDir, storageRelative, STORAGE_ROOT } from "@/lib/stor
 import { extractFirstFrame, extractLastFrame, getVideoDuration } from "@/lib/ffmpeg";
 import fs from "fs";
 import path from "path";
+import { normalizeStoredVariantReferenceImages } from "@/lib/video/reference-image-dedup";
 
 export const dynamic = "force-dynamic";
 
@@ -129,5 +130,13 @@ export async function POST(
     },
   });
 
+  if (episode) {
+    await normalizeStoredVariantReferenceImages(
+      episode.scenes.flatMap((scene) => [
+        ...scene.videoVariants,
+        ...(scene.selectedVideo ? [scene.selectedVideo] : []),
+      ])
+    );
+  }
   return NextResponse.json(episode?.scenes ?? []);
 }

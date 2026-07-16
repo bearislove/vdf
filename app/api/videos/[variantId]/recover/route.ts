@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getVideoProvider } from "@/lib/providers/registry";
+import { getVideoProvider, resolveVideoProviderName } from "@/lib/providers/registry";
+import { toErrorMessage } from "@/lib/utils/errors";
 import { finalizeVideoFile } from "@/lib/video/finalize-video-file";
 import type { VideoGenHooks } from "@/lib/providers/types";
 
@@ -17,7 +18,7 @@ export async function POST(
     if (!variant) return NextResponse.json({ error: "Variant not found" }, { status: 404 });
     if (!variant.scene) return NextResponse.json({ error: "Scene not found (may have been deleted)" }, { status: 404 });
 
-    const provider = getVideoProvider(variant.provider === "AGNES" ? "agnes" : "comfyui");
+    const provider = getVideoProvider(resolveVideoProviderName(variant.provider));
 
     let recoveredVideoPath: string | undefined;
     const hooks: VideoGenHooks = {
@@ -36,7 +37,7 @@ export async function POST(
       async onError(message) {
         await prisma.videoVariant.update({
           where: { id: variant.id },
-          data: { status: "FAILED", errorDetail: typeof message === "string" ? message : JSON.stringify(message) },
+          data: { status: "FAILED", errorDetail: toErrorMessage(message) },
         });
       },
     };

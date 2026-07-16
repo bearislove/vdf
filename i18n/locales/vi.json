@@ -21,6 +21,8 @@
     "deselect": "Bỏ chọn",
     "name": "Tên",
     "view": "Xem",
+    "download": "Tải xuống",
+    "downloadFailed": "Không thể tải ảnh",
     "dragFiles": "Kéo file vào đây",
     "uploading": "Đang upload...",
     "closeEsc": "Đóng (ESC)",
@@ -28,7 +30,6 @@
   },
   "nav": {
     "films": "Bộ phim",
-    "settings": "Cài đặt",
     "backTo": "Quay lại"
   },
   "film": {
@@ -65,6 +66,10 @@
     "uploadStory": "Tải file cốt chuyện (.md, .txt)",
     "enriching": "Đang phân tích với AI...",
     "enrichSuccess": "Phân tích thành công",
+    "exportVideo": "Xuất video tập",
+    "exportingVideo": "Đang xuất...",
+    "exportComplete": "Xuất video xong! Đang tải về...",
+    "exportFailed": "Xuất video thất bại",
     "createNew": "Tạo tập mới",
     "nameLabel": "Tên tập",
     "namePlaceholder": "VD: Tập 1 — Khởi đầu",
@@ -105,6 +110,7 @@
     "scenePreview": "Danh sách cảnh",
     "sceneTitle": "Tên cảnh",
     "scenePrompt": "Mô tả cảnh",
+    "sceneNegativePrompt": "Negative prompt của cảnh",
     "revisionPlaceholder": "Yêu cầu AI viết lại, ví dụ: tăng kịch tính ở đoạn kết...",
     "regenerate": "Tạo lại",
     "regenerating": "Đang tạo lại...",
@@ -120,11 +126,21 @@
     "scene": "Cảnh",
     "generate": "Tạo video",
     "generatingVideo": "Đang tạo video...",
+    "enhanceSceneDescription": "Làm sinh động mô tả cảnh bằng AI",
+    "enhancingSceneDescription": "AI đang bổ sung mô tả cảnh...",
+    "sceneDescriptionEnhanced": "Đã bổ sung mô tả cảnh bằng AI",
+    "simplifySceneDescription": "Đơn giản hoá mô tả cảnh bằng AI",
+    "simplifyingSceneDescription": "AI đang đơn giản hoá mô tả cảnh...",
+    "sceneDescriptionSimplified": "Đã đơn giản hoá mô tả cảnh",
     "addVariant": "Tạo thêm bản mới",
     "variants": "Các bản video",
     "selectMain": "Chọn làm chính",
     "selectedScene": "Cảnh đang chọn",
     "sceneNumber": "Cảnh {n}",
+    "addScene": "Thêm cảnh",
+    "arrangeScenes": "Sắp xếp tự động",
+    "arrangingScenes": "Đang sắp xếp...",
+    "scenesArranged": "Đã sắp xếp lại các cảnh",
     "addToScene": "+ Thêm vào cảnh này",
     "charactersAndObjects": "Nhân vật & Đối tượng",
     "initialReferenceImage": "Ảnh tham chiếu khởi đầu",
@@ -148,12 +164,11 @@
     "noGenerationResponse": "Nhà cung cấp không trả về ảnh",
     "referenceImageCount": "Có {count} ảnh",
     "generateAnotherImage": "Tạo thêm ảnh",
-    "uploadReferenceImageHint": "Bấm hoặc kéo thả JPG, PNG, WEBP · tối đa 15 MB/ảnh",
+    "uploadReferenceImageHint": "Tải ảnh tham chiếu nội dung cho scene (JPG, PNG, WEBP · tối đa 15 MB). Ở scene đầu tiên, ảnh mới nhất cũng được dùng làm frame mở đầu video.",
     "referenceImageUploaded": "Đã tải lên {count} ảnh tham chiếu",
-    "selectForVideo": "Dùng cho video",
-    "selectedForVideo": "Đang dùng cho video",
-    "referenceImageSelected": "Đã chọn ảnh tham chiếu",
-    "noGeneratedReferenceImages": "Chưa có ảnh tham chiếu"
+    "noGeneratedReferenceImages": "Chưa có ảnh tham chiếu",
+    "usePreviousFirstFrame": "Dùng first_frame từ video trước",
+    "usePreviousFirstFrameHint": "Dùng frame cuối của scene trước làm frame mở đầu video"
   },
   "object": {
     "types": {
@@ -197,68 +212,9 @@
   },
   "params": {
     "description": "Mô tả cảnh",
+    "negativePrompt": "Negative prompt",
+    "negativePromptPlaceholder": "Ví dụ: blurry, identity drift, distorted hands, unwanted text, camera shake...",
     "duration": "Thời lượng"
-  },
-  "settings": {
-    "title": "Cài đặt",
-    "sections": {
-      "comfyui": "ComfyUI",
-      "agnes": "Agnes AI",
-      "models": "Models",
-      "ai": "AI Provider",
-      "storage": "Storage",
-      "about": "Về app"
-    },
-    "comfyui": {
-      "url": "Server URL",
-      "timeout": "Timeout (giây)",
-      "test": "Kiểm tra",
-      "connected": "Đang chạy",
-      "disconnected": "Không kết nối được"
-    },
-    "agnes": {
-      "apiKeyWarning": "API key đọc từ AGNES_AI_API_KEY trong file .env — không lưu qua UI này.",
-      "imageProvider": "Provider ảnh (mặc định)",
-      "videoProvider": "Provider video (mặc định)",
-      "imageModel": "Image model",
-      "videoModel": "Video model",
-      "modelHint": "Có thể chọn provider riêng cho từng Scene/Object, mặc định ở đây chỉ là giá trị khởi tạo.",
-      "test": "Kiểm tra",
-      "connected": "Kết nối thành công",
-      "disconnected": "Không kết nối được"
-    },
-    "models": {
-      "imageModel": "Image model",
-      "videoModel": "Video model",
-      "vae": "VAE",
-      "distilledLora": "Distilled LoRA",
-      "reload": "Reload từ ComfyUI",
-      "selectModel": "-- Chọn model --",
-      "selectLora": "-- Chọn LoRA --",
-      "loadError": "Không tải được model list. Kiểm tra ComfyUI đang chạy."
-    },
-    "ai": {
-      "provider": "Provider",
-      "apiUrl": "API URL",
-      "apiKey": "API Key",
-      "model": "Model",
-      "apiKeyWarning": "API key đọc từ file .env — không lưu qua UI này.",
-      "modelPlaceholder": "gpt-4o, gemini-pro, llama3...",
-      "providers": {
-        "openai": "OpenAI / OpenAI-compatible",
-        "ollama": "Ollama"
-      }
-    },
-    "storage": {
-      "path": "Storage path",
-      "directoryStructure": "Cấu trúc thư mục",
-      "fileServeInfo": "Files được serve qua /api/files/[...path] — không expose path trực tiếp."
-    },
-    "about": {
-      "version": "VDF v1.0.0",
-      "description": "AI Video Production App.",
-      "techStack": "Tạo phim từ cốt chuyện văn bản với ComfyUI + LTX Video / Wan2.2 / SVD."
-    }
   },
   "generation": {
     "provider": "Provider"

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { getLLMProvider } from "@/lib/providers/registry";
+import { getLLMProvider, resolveTextProviderName } from "@/lib/providers/registry";
+import type { TextProviderName } from "@/lib/providers/types";
 import {
   SYSTEM_SCREENWRITER,
   SYSTEM_PRODUCTION,
@@ -17,6 +18,7 @@ export const SceneSchema = z.object({
       order: z.number().int().positive(),
       title: z.string(),
       prompt_en: z.string().min(10),
+      negative_prompt: z.string().min(3),
       camera_direction: z.string(),
       shot_type: ShotTypeEnum,
       mood: z.string(),
@@ -80,24 +82,31 @@ async function callWithRetry<T>(
   throw new Error(`AI validation failed after ${maxRetries} retries: ${lastError}`);
 }
 
-function callAI(system: string, user: string): Promise<string> {
-  return getLLMProvider().chatComplete(system, user, { temperature: 0.7 });
+function callAI(provider: TextProviderName, system: string, user: string): Promise<string> {
+  return getLLMProvider(provider).chatComplete(system, user, { temperature: 0.7 });
+}
+
+interface EnrichmentOptions {
+  revisionRequest?: string;
+  provider?: unknown;
 }
 
 export async function runEnrichment(
   storyRaw: string,
   existingObjects: Array<{ name: string; type: string; description_en: string }> = [],
-  revisionRequest?: string
+  options: EnrichmentOptions = {}
 ): Promise<EnrichmentResult> {
+  const provider = resolveTextProviderName(options.provider);
   // Call 1: Translate + expand
   const storyEnriched = await callAI(
+    provider,
     SYSTEM_SCREENWRITER,
-    promptTranslateExpand(storyRaw, revisionRequest)
+    promptTranslateExpand(storyRaw, options.revisionRequest)
   );
 
   // Call 2: Parse scenes
   const { scenes } = await callWithRetry(
-    () => callAI(SYSTEM_PRODUCTION, promptParseScenes(storyEnriched)),
+    () => callAI(provider, SYSTEM_PRODUCTION, promptParseScenes(storyEnriched)),
     SceneSchema
   );
 
@@ -105,6 +114,7 @@ export async function runEnrichment(
   const { objects, links } = await callWithRetry(
     () =>
       callAI(
+        provider,
         SYSTEM_PRODUCTION,
         promptExtractObjects(storyEnriched, JSON.stringify({ scenes }), existingObjects)
       ),

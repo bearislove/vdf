@@ -21,6 +21,8 @@
     "deselect": "Deselect",
     "name": "Name",
     "view": "View",
+    "download": "Download",
+    "downloadFailed": "Could not download image",
     "dragFiles": "Drop files here",
     "uploading": "Uploading...",
     "closeEsc": "Close (ESC)",
@@ -28,7 +30,6 @@
   },
   "nav": {
     "films": "Films",
-    "settings": "Settings",
     "backTo": "Back to"
   },
   "film": {
@@ -65,6 +66,10 @@
     "uploadStory": "Upload story file (.md, .txt)",
     "enriching": "Analyzing with AI...",
     "enrichSuccess": "Analysis complete",
+    "exportVideo": "Export episode video",
+    "exportingVideo": "Exporting...",
+    "exportComplete": "Video exported! Downloading...",
+    "exportFailed": "Failed to export video",
     "createNew": "New Episode",
     "nameLabel": "Episode name",
     "namePlaceholder": "E.g. Episode 1 — The Beginning",
@@ -105,6 +110,7 @@
     "scenePreview": "Scene list",
     "sceneTitle": "Scene title",
     "scenePrompt": "Scene description",
+    "sceneNegativePrompt": "Scene negative prompt",
     "revisionPlaceholder": "Ask AI for a rewrite, e.g. make the ending more dramatic...",
     "regenerate": "Regenerate",
     "regenerating": "Regenerating...",
@@ -120,11 +126,21 @@
     "scene": "Scene",
     "generate": "Generate Video",
     "generatingVideo": "Generating video...",
+    "enhanceSceneDescription": "Enhance scene description with AI",
+    "enhancingSceneDescription": "AI is enhancing the scene description...",
+    "sceneDescriptionEnhanced": "Scene description enhanced",
+    "simplifySceneDescription": "Simplify scene description with AI",
+    "simplifyingSceneDescription": "AI is simplifying the scene description...",
+    "sceneDescriptionSimplified": "Scene description simplified",
     "addVariant": "Generate New Variant",
     "variants": "Video Variants",
     "selectMain": "Set as Main",
     "selectedScene": "Selected Scene",
     "sceneNumber": "Scene {n}",
+    "addScene": "Add scene",
+    "arrangeScenes": "Auto arrange",
+    "arrangingScenes": "Arranging...",
+    "scenesArranged": "Scenes arranged",
     "addToScene": "+ Add to scene",
     "charactersAndObjects": "Characters & Objects",
     "initialReferenceImage": "Initial reference image",
@@ -148,12 +164,11 @@
     "noGenerationResponse": "Image provider returned no result",
     "referenceImageCount": "{count} images",
     "generateAnotherImage": "Generate another image",
-    "uploadReferenceImageHint": "Click or drop JPG, PNG, WEBP · max 15 MB each",
+    "uploadReferenceImageHint": "Upload a visual content reference for this scene (JPG, PNG, WEBP · max 15 MB). For the first scene, the latest image is also used as the video's opening frame.",
     "referenceImageUploaded": "{count} reference images uploaded",
-    "selectForVideo": "Use for video",
-    "selectedForVideo": "Used for video",
-    "referenceImageSelected": "Reference image selected",
-    "noGeneratedReferenceImages": "No reference images"
+    "noGeneratedReferenceImages": "No reference images",
+    "usePreviousFirstFrame": "Use first_frame from previous video",
+    "usePreviousFirstFrameHint": "Use the previous scene's last frame as this video's opening frame"
   },
   "object": {
     "types": {
@@ -197,68 +212,9 @@
   },
   "params": {
     "description": "Scene description",
+    "negativePrompt": "Negative prompt",
+    "negativePromptPlaceholder": "E.g. blurry, identity drift, distorted hands, unwanted text, camera shake...",
     "duration": "Duration"
-  },
-  "settings": {
-    "title": "Settings",
-    "sections": {
-      "comfyui": "ComfyUI",
-      "agnes": "Agnes AI",
-      "models": "Models",
-      "ai": "AI Provider",
-      "storage": "Storage",
-      "about": "About"
-    },
-    "comfyui": {
-      "url": "Server URL",
-      "timeout": "Timeout (seconds)",
-      "test": "Test",
-      "connected": "Connected",
-      "disconnected": "Disconnected"
-    },
-    "agnes": {
-      "apiKeyWarning": "API key is read from AGNES_AI_API_KEY in .env — not saved through this UI.",
-      "imageProvider": "Image provider (default)",
-      "videoProvider": "Video provider (default)",
-      "imageModel": "Image model",
-      "videoModel": "Video model",
-      "modelHint": "You can pick a different provider per Scene/Object — this is just the initial default.",
-      "test": "Test",
-      "connected": "Connected",
-      "disconnected": "Disconnected"
-    },
-    "models": {
-      "imageModel": "Image model",
-      "videoModel": "Video model",
-      "vae": "VAE",
-      "distilledLora": "Distilled LoRA",
-      "reload": "Reload from ComfyUI",
-      "selectModel": "-- Select model --",
-      "selectLora": "-- Select LoRA --",
-      "loadError": "Failed to load model list. Check if ComfyUI is running."
-    },
-    "ai": {
-      "provider": "Provider",
-      "apiUrl": "API URL",
-      "apiKey": "API Key",
-      "model": "Model",
-      "apiKeyWarning": "API key is read from .env — not saved through this UI.",
-      "modelPlaceholder": "gpt-4o, gemini-pro, llama3...",
-      "providers": {
-        "openai": "OpenAI / OpenAI-compatible",
-        "ollama": "Ollama"
-      }
-    },
-    "storage": {
-      "path": "Storage path",
-      "directoryStructure": "Directory structure",
-      "fileServeInfo": "Files are served via /api/files/[...path] — paths are not exposed directly."
-    },
-    "about": {
-      "version": "VDF v1.0.0",
-      "description": "AI Video Production App.",
-      "techStack": "Create films from text stories with ComfyUI + LTX Video / Wan2.2 / SVD."
-    }
   },
   "generation": {
     "provider": "Provider"

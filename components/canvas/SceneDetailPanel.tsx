@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { IconLoader2, IconPlayerPlay } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconLoader2, IconPlayerPlay, IconSparkles, IconTextDecrease } from "@tabler/icons-react";
 import { useAppStore } from "@/store/useAppStore";
-import { useSettingsStore } from "@/store/useSettingsStore";
 import { useTranslation } from "@/hooks/useTranslation";
 import { apiPut, apiPost } from "@/lib/utils/api";
 import { ParamsSimple, durationToFrames, type SimpleParams } from "./ParamsSimple";
@@ -30,38 +29,111 @@ interface Props {
   onUpdate: () => void;
 }
 
+function getSavedParams(scene: SceneWithLinks): SimpleParams {
+  const rawDuration = scene.videoParams?.duration;
+  const rawFrames = scene.videoParams?.numFrames;
+  let duration = "4";
+
+  if ((typeof rawDuration === "string" || typeof rawDuration === "number") && Number(rawDuration) > 0) {
+    duration = String(rawDuration);
+  } else if (typeof rawFrames === "number" && rawFrames > 1) {
+    duration = String(Math.max(1, Math.round((rawFrames - 1) / 24)));
+  }
+
+  return {
+    promptEn: scene.promptEnOverride ?? scene.promptEn,
+    negativePrompt: scene.negativePrompt,
+    duration,
+    aspectRatio: typeof scene.videoParams?.aspectRatio === "string"
+      ? scene.videoParams.aspectRatio
+      : "16:9",
+  };
+}
+
 export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
   const { selectScene } = useCanvasStore();
-  const defaultVideoProvider = useSettingsStore((s) => s.videoProvider);
-  const [genProvider, setGenProvider] = useState<GenerationProviderName>(defaultVideoProvider);
-  const [simpleParams, setSimpleParams] = useState<SimpleParams>({
-    promptEn: scene.promptEnOverride ?? scene.promptEn,
-    duration: "4",
-    aspectRatio: "16:9",
-  });
+  const [genProvider, setGenProvider] = useState<GenerationProviderName>("agnes");
+  const [simpleParams, setSimpleParams] = useState<SimpleParams>(() => getSavedParams(scene));
+  const [savedParams, setSavedParams] = useState<SimpleParams>(() => getSavedParams(scene));
+  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [enhancingDescription, setEnhancingDescription] = useState(false);
+  const [simplifyingDescription, setSimplifyingDescription] = useState(false);
   const [isSvdModel, setIsSvdModel] = useState(false);
+  const [useLastFrameChaining, setUseLastFrameChaining] = useState(scene.useLastFrameChaining);
+  const [savingChaining, setSavingChaining] = useState(false);
 
   useEffect(() => {
-    fetch("/api/config").then(r => r.json()).then(d => setIsSvdModel(d.isSvd)).catch(() => {});
+    fetch("/api/config")
+      .then((response) => response.json())
+      .then((config) => {
+        setIsSvdModel(config.isSvd);
+        if (config.defaultVideoProvider === "agnes" || config.defaultVideoProvider === "comfyui") {
+          setGenProvider(config.defaultVideoProvider);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const prompt = simpleParams.promptEn;
+  const negativePrompt = simpleParams.negativePrompt;
   const duration = simpleParams.duration;
+
+  useEffect(() => {
+    const nextParams = getSavedParams(scene);
+    setSimpleParams(nextParams);
+    setSavedParams(nextParams);
+    setUseLastFrameChaining(scene.useLastFrameChaining);
+    // A different scene has its own independently persisted editor state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene.id]);
 
   useEffect(() => {
     setSimpleParams((p) => ({
       ...p,
       promptEn: scene.promptEnOverride ?? scene.promptEn,
     }));
+    setSavedParams((p) => ({
+      ...p,
+      promptEn: scene.promptEnOverride ?? scene.promptEn,
+    }));
   }, [scene.id, scene.promptEn, scene.promptEnOverride]);
+
+  const persistedNegativePrompt = scene.negativePrompt;
+  useEffect(() => {
+    setSimpleParams((p) => ({ ...p, negativePrompt: persistedNegativePrompt }));
+    setSavedParams((p) => ({ ...p, negativePrompt: persistedNegativePrompt }));
+  }, [scene.id, persistedNegativePrompt]);
+
+  const hasChanges = simpleParams.promptEn !== savedParams.promptEn
+    || simpleParams.negativePrompt !== savedParams.negativePrompt
+    || simpleParams.duration !== savedParams.duration
+    || simpleParams.aspectRatio !== savedParams.aspectRatio;
+  const hasValidDuration = /^\d+$/.test(duration) && Number(duration) > 0;
 
   const hasActiveVideo = scene.videoVariants?.some((variant) =>
     ["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"].includes(variant.status)
   ) ?? false;
   const isVideoGenerating = generating || hasActiveVideo;
+  const hasPreviousFrame = !!(previousScene?.selectedVideo?.lastFramePath ||
+    previousScene?.videoVariants?.some((variant) => variant.status === "DONE" && variant.lastFramePath));
+
+  const handleToggleLastFrameChaining = useCallback(async (enabled: boolean) => {
+    const previousValue = useLastFrameChaining;
+    setUseLastFrameChaining(enabled);
+    setSavingChaining(true);
+    try {
+      await apiPut(`/api/scenes/${scene.id}`, { useLastFrameChaining: enabled });
+      onUpdate();
+    } catch (error) {
+      setUseLastFrameChaining(previousValue);
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingChaining(false);
+    }
+  }, [scene.id, useLastFrameChaining, addToast, onUpdate]);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -69,8 +141,10 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
       await apiPost("/api/videos", {
         sceneId: scene.id,
         provider: genProvider,
+        useLastFrameChaining,
         params: {
           promptEn: prompt,
+          negativePrompt: negativePrompt.trim(),
           numFrames: durationToFrames(duration),
           aspectRatio: simpleParams.aspectRatio,
         },
@@ -82,12 +156,77 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
     } finally {
       setGenerating(false);
     }
-  }, [scene.id, prompt, duration, simpleParams.aspectRatio, genProvider, onUpdate, addToast, t]);
+  }, [scene.id, prompt, negativePrompt, duration, simpleParams.aspectRatio, genProvider, useLastFrameChaining, onUpdate, addToast, t]);
+
+  const handleSave = useCallback(async () => {
+    const normalizedPrompt = prompt.trim();
+    if (!normalizedPrompt || !hasValidDuration || saving || !hasChanges) return;
+
+    setSaving(true);
+    try {
+      const nextParams = {
+        ...simpleParams,
+        promptEn: normalizedPrompt,
+        negativePrompt: negativePrompt.trim(),
+      };
+      await apiPut(`/api/scenes/${scene.id}`, {
+        promptEnOverride: normalizedPrompt,
+        negativePrompt: nextParams.negativePrompt,
+        videoParams: {
+          ...scene.videoParams,
+          duration: Number(duration),
+          numFrames: durationToFrames(duration),
+          aspectRatio: simpleParams.aspectRatio,
+        },
+      });
+      setSimpleParams(nextParams);
+      setSavedParams(nextParams);
+      addToast("success", t("common.success"));
+      onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }, [prompt, negativePrompt, hasValidDuration, saving, hasChanges, simpleParams, scene.id, scene.videoParams, duration, addToast, t, onUpdate]);
 
   const handleSelectVariant = async (variantId: string) => {
     await apiPut(`/api/scenes/${scene.id}`, { selectedVideoId: variantId });
     onUpdate();
   };
+
+  const descriptionBusy = enhancingDescription || simplifyingDescription;
+
+  const rewriteDescription = async (
+    endpoint: "enhance-description" | "simplify-description",
+    setBusy: (busy: boolean) => void,
+    successMessage: string
+  ) => {
+    if (!prompt.trim() || descriptionBusy || isVideoGenerating) return;
+    setBusy(true);
+    try {
+      const result = await apiPost<{ description: string }>(
+        `/api/scenes/${scene.id}/${endpoint}`,
+        { description: prompt.trim() }
+      );
+      await apiPut(`/api/scenes/${scene.id}`, {
+        promptEnOverride: result.description,
+      });
+      setSimpleParams((current) => ({ ...current, promptEn: result.description }));
+      addToast("success", successMessage);
+      onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleEnhanceDescription = () =>
+    rewriteDescription("enhance-description", setEnhancingDescription, t("canvas.sceneDescriptionEnhanced"));
+
+  const handleSimplifyDescription = () =>
+    rewriteDescription("simplify-description", setSimplifyingDescription, t("canvas.sceneDescriptionSimplified"));
 
   const handleDeleteVariant = async (variantId: string) => {
     await fetch(`/api/videos/${variantId}`, { method: "DELETE" });
@@ -128,11 +267,51 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
         )}
 
         {/* Prompt */}
-        <label className="form-label">{t("params.description")}</label>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+          <label className="form-label" htmlFor="scene-description" style={{ marginBottom: 0 }}>
+            {t("params.description")}
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={handleSimplifyDescription}
+              disabled={!prompt.trim() || descriptionBusy || isVideoGenerating}
+              title={simplifyingDescription
+                ? t("canvas.simplifyingSceneDescription")
+                : t("canvas.simplifySceneDescription")}
+              aria-label={t("canvas.simplifySceneDescription")}
+              aria-busy={simplifyingDescription}
+              style={{ width: 25, height: 25, color: "var(--accent)" }}
+            >
+              {simplifyingDescription
+                ? <IconLoader2 size={13} className="loading-spinner" aria-hidden="true" />
+                : <IconTextDecrease size={14} stroke={1.9} aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={handleEnhanceDescription}
+              disabled={!prompt.trim() || descriptionBusy || isVideoGenerating}
+              title={enhancingDescription
+                ? t("canvas.enhancingSceneDescription")
+                : t("canvas.enhanceSceneDescription")}
+              aria-label={t("canvas.enhanceSceneDescription")}
+              aria-busy={enhancingDescription}
+              style={{ width: 25, height: 25, color: "var(--accent)" }}
+            >
+              {enhancingDescription
+                ? <IconLoader2 size={13} className="loading-spinner" aria-hidden="true" />
+                : <IconSparkles size={14} stroke={1.9} aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
         <textarea
+          id="scene-description"
           value={prompt}
           onChange={(e) => setSimpleParams((p) => ({ ...p, promptEn: e.target.value }))}
-          rows={4}
+          rows={8}
+          disabled={descriptionBusy}
           style={{ resize: "vertical", marginBottom: 10 }}
         />
 
@@ -156,12 +335,34 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
 
         <div className="divider" />
 
+        <label
+          className={`scene-chaining-switch ${useLastFrameChaining && hasPreviousFrame ? "is-active" : ""}`}
+          title={hasPreviousFrame ? t("canvas.usePreviousFirstFrameHint") : t("canvas.noPreviousFrame")}
+        >
+          <span>
+            <span>{t("canvas.usePreviousFirstFrame")}</span>
+            <small>
+              {hasPreviousFrame ? t("canvas.usePreviousFirstFrameHint") : t("canvas.noPreviousFrame")}
+            </small>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={useLastFrameChaining && hasPreviousFrame}
+            disabled={isVideoGenerating || savingChaining || !hasPreviousFrame}
+            onChange={(event) => handleToggleLastFrameChaining(event.target.checked)}
+          />
+        </label>
+
+        <div className="divider" />
+
         <div style={{ display: "flex", alignItems: "stretch", gap: 7, marginBottom: 10 }}>
           <label style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 10, color: "var(--text2)", flexShrink: 0 }}>
               {t("generation.provider")}
             </span>
             <GenerationProviderSelect
+              modality="video"
               value={genProvider}
               onChange={setGenProvider}
               style={{ minWidth: 0, flex: 1, height: 34 }}
@@ -206,6 +407,21 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
           </>
         )}
       </div>
+
+      <footer className="detail-panel-footer">
+        <button
+          type="button"
+          className="btn-p"
+          onClick={handleSave}
+          disabled={saving || descriptionBusy || !hasChanges || !prompt.trim() || !hasValidDuration}
+          aria-busy={saving}
+        >
+          {saving
+            ? <IconLoader2 className="loading-spinner" size={15} aria-hidden="true" />
+            : <IconDeviceFloppy size={15} aria-hidden="true" />}
+          {saving ? t("common.processing") : t("common.save")}
+        </button>
+      </footer>
 
     </div>
   );

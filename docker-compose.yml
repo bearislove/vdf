@@ -1,25 +1,28 @@
-version: '3.9'
-
 services:
   app:
     container_name: app_${CONTAINER_NAME}
     build:
       context: .
       dockerfile: Dockerfile
+      target: development
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql://storyforge:storyforge@db:5432/storyforge
-      - AI_BASE_URL=http://host.docker.internal:20128/v1
-      - COMFYUI_URL=http://host.docker.internal:8188
-      - COMFYUI_WS_URL=ws://host.docker.internal:8188/ws
+      DATABASE_URL: postgresql://storyforge:storyforge@db:5432/storyforge
+      AI_BASE_URL: http://host.docker.internal:20128/v1
+      COMFYUI_URL: http://host.docker.internal:8188
+      COMFYUI_WS_URL: ws://host.docker.internal:8188/ws
+      WATCHPACK_POLLING: "true"
     depends_on:
       db:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - .:/app
+      - app_node_modules:/app/node_modules
+      - app_next:/app/.next
       - ./storage:/app/storage
 
   db:
@@ -40,4 +43,6 @@ services:
       retries: 10
 
 volumes:
+  app_node_modules:
+  app_next:
   pgdata:

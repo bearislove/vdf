@@ -11,15 +11,16 @@ import {
 } from "@tabler/icons-react";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAppStore } from "@/store/useAppStore";
-import { useSettingsStore } from "@/store/useSettingsStore";
 import { useTranslation } from "@/hooks/useTranslation";
 import { apiPut } from "@/lib/utils/api";
+import { consumeSSE } from "@/lib/utils/sse";
 import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
 import { PanelSection } from "@/components/ui/PanelSection";
 import { PhotoGrid } from "@/components/ui/PhotoGrid";
 import { UploadZone } from "@/components/ui/UploadZone";
 import { GenerationProviderSelect } from "@/components/ui/GenerationProviderSelect";
 import { DetailPanelHeader } from "@/components/ui/DetailPanelHeader";
+import { DownloadImageButton } from "@/components/ui/DownloadImageButton";
 import type { GenerationProviderName } from "@/lib/providers/types";
 import type { StoryObject, RefImage } from "@/types/object";
 
@@ -34,7 +35,6 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
   const { t } = useTranslation();
   const { selectObject } = useCanvasStore();
   const { addToast } = useAppStore();
-  const defaultImageProvider = useSettingsStore((state) => state.imageProvider);
   const [name, setName] = useState(object.name);
   const [description, setDescription] = useState(object.descriptionEn);
   const [imageTab, setImageTab] = useState<ImageTab>("reference");
@@ -42,7 +42,7 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState("");
-  const [generationProvider, setGenerationProvider] = useState<GenerationProviderName>(defaultImageProvider);
+  const [generationProvider, setGenerationProvider] = useState<GenerationProviderName>("agnes");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,6 +51,17 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
     setGenerationProgress("");
     setImageTab("reference");
   }, [object.id, object.name, object.descriptionEn]);
+
+  useEffect(() => {
+    fetch("/api/config")
+      .then((response) => response.json())
+      .then((config) => {
+        if (config.defaultImageProvider === "agnes" || config.defaultImageProvider === "comfyui") {
+          setGenerationProvider(config.defaultImageProvider);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const images = (object.refImages as RefImage[]) ?? [];
   const referenceImages = images.filter((image) => image.label !== "AI generated");
@@ -113,7 +124,7 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
       return;
     }
     setGenerating(true);
-    setGenerationProgress(t("object.sendingToComfyUI"));
+    setGenerationProgress(t("common.processing"));
     try {
       const response = await fetch(`/api/objects/${object.id}/generate-image`, {
         method: "POST",
@@ -129,37 +140,22 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
         throw new Error(`Generation failed (${response.status})`);
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            if (event.type === "progress") {
-              const percent = event.total > 0 ? Math.round((event.step / event.total) * 100) : 0;
-              setGenerationProgress(`${event.step}/${event.total} (${percent}%)`);
-            } else if (event.type === "status") {
-              setGenerationProgress(event.message ?? "...");
-            } else if (event.type === "done") {
-              setGenerationProgress("");
-              addToast("success", t("object.imageGenerated"));
-              await onUpdate();
-            } else if (event.type === "error") {
-              throw new Error(event.message ?? t("object.generateFailed"));
-            }
-          } catch (error) {
-            if (error instanceof SyntaxError) continue;
-            throw error;
-          }
+      await consumeSSE(response, async (event) => {
+        if (event.type === "progress") {
+          const step = event.step ?? 0;
+          const total = event.total ?? 0;
+          const percent = total > 0 ? Math.round((step / total) * 100) : 0;
+          setGenerationProgress(`${step}/${total} (${percent}%)`);
+        } else if (event.type === "status") {
+          setGenerationProgress(event.message ?? "...");
+        } else if (event.type === "done") {
+          setGenerationProgress("");
+          addToast("success", t("object.imageGenerated"));
+          await onUpdate();
+        } else if (event.type === "error") {
+          throw new Error(event.message ?? t("object.generateFailed"));
         }
-      }
+      });
     } catch (error) {
       addToast("error", String(error));
       setGenerationProgress("");
@@ -197,10 +193,20 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
         closeLabel={t("common.close")}
         onClose={() => selectObject(null)}
         visual={
-          <div className={`object-detail-avatar ${objectType.className}`}>
-            {mainImage
-              ? <img src={`/api/files/${mainImage.path}`} alt={object.name} />
-              : objectType.icon}
+          <div className="object-detail-avatar-wrap">
+            <div className={`object-detail-avatar ${objectType.className}`}>
+              {mainImage
+                ? <img src={`/api/files/${mainImage.path}`} alt={object.name} />
+                : objectType.icon}
+            </div>
+            {mainImage && (
+              <DownloadImageButton
+                imagePath={mainImage.path}
+                className="icon-btn"
+                size={10}
+                style={{ position: "absolute", right: -4, bottom: -4, width: 19, height: 19 }}
+              />
+            )}
           </div>
         }
       />
@@ -279,6 +285,7 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
           ) : (
             <div className="object-generate-controls">
               <GenerationProviderSelect
+                modality="image"
                 value={generationProvider}
                 onChange={setGenerationProvider}
                 disabled={generating}
@@ -302,7 +309,7 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
         </PanelSection>
       </div>
 
-      <footer className="object-detail-footer">
+      <footer className="detail-panel-footer">
         <button
           className="btn-p"
           onClick={handleSave}

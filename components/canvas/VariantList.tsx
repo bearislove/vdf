@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
+import { DownloadImageButton } from "@/components/ui/DownloadImageButton";
 import type { VideoVariant } from "@/types/video";
 
 interface VariantListProps {
@@ -87,14 +88,19 @@ function VariantCard({
 }) {
   const { t } = useTranslation();
   const [showPlayer, setShowPlayer] = useState(false);
-  const [showReference, setShowReference] = useState(false);
+  const [previewReference, setPreviewReference] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [errorExpanded, setErrorExpanded] = useState(false);
-  const seed = (variant.paramsSnapshot as Record<string, unknown>)?.seed ?? "?";
-  const snapshotReference = (variant.paramsSnapshot as Record<string, unknown>)?.referenceImagePath;
-  const referenceImagePath = variant.compositeImagePath ||
-    (typeof snapshotReference === "string" ? snapshotReference : null);
+  const snapshot = variant.paramsSnapshot as Record<string, unknown>;
+  const seed = snapshot?.seed ?? "?";
+  // Danh sách đầy đủ ảnh tham chiếu đã gửi cho provider; variant cũ chỉ lưu 1 ảnh first frame
+  const fallbackReference = variant.compositeImagePath ||
+    (typeof snapshot?.referenceImagePath === "string" ? snapshot.referenceImagePath : null);
+  const storedReferenceImagePaths = variant.referenceImagePaths?.length
+    ? variant.referenceImagePaths
+    : fallbackReference ? [fallbackReference] : [];
+  const referenceImagePaths = Array.from(new Set(storedReferenceImagePaths));
   const isGenerating =
     variant.status === "QUEUED" ||
     variant.status === "GENERATING_IMAGE" ||
@@ -114,8 +120,8 @@ function VariantCard({
           border: isFailed
             ? "1px solid var(--red)"
             : isSelected
-            ? "1.5px solid var(--accent)"
-            : "0.5px solid var(--border)",
+              ? "1.5px solid var(--accent)"
+              : "0.5px solid var(--border)",
           borderRadius: 5,
           overflow: "visible",
           cursor: "pointer",
@@ -150,36 +156,58 @@ function VariantCard({
           ) : isFailed ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <IconAlertTriangle size={18} stroke={2} style={{ color: "var(--red)" }} aria-hidden="true" />
-              <span style={{ fontSize: 9, color: "var(--red)", textAlign: "center" }}>
-                {t("video.generationFailed")}
-              </span>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  setRecovering(true);
-                  try {
-                    await onRecover();
-                  } finally {
-                    setRecovering(false);
-                  }
-                }}
-                disabled={recovering}
-                style={{
-                  fontSize: 9, padding: "2px 6px", borderRadius: 3,
-                  border: "0.5px solid var(--blue)", background: "var(--blue-dim)",
-                  color: "var(--blue)", cursor: recovering ? "not-allowed" : "pointer",
-                  opacity: recovering ? 0.6 : 1,
-                  display: "inline-flex", alignItems: "center", gap: 3,
-                }}
-              >
-                <IconRefresh
-                  size={10}
-                  stroke={2}
-                  className={recovering ? "loading-spinner" : undefined}
-                  aria-hidden="true"
-                />
-                {t("video.recheck")}
-              </button>
+              {isFailed && (
+                <div
+                  role="alert"
+                  title={errorMessage}
+                  style={{
+                    padding: "6px 7px",
+                    background: "var(--red-dim)",
+                    borderTop: "0.5px solid var(--red)",
+                    borderRadius: "0 0 4px 4px",
+                    color: "var(--red)",
+                    fontSize: 9,
+                    lineHeight: 1.4,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  <div
+                    style={errorExpanded ? undefined : {
+                      display: "-webkit-box",
+                      WebkitBoxOrient: "vertical",
+                      WebkitLineClamp: 3,
+                      overflow: "hidden",
+                    }}
+                  >
+                    {errorMessage}
+                  </div>
+                  {errorMessage.length > 90 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setErrorExpanded((expanded) => !expanded);
+                      }}
+                      title={errorExpanded ? t("video.hideError") : t("video.showFullError")}
+                      aria-label={errorExpanded ? t("video.hideError") : t("video.showFullError")}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        marginTop: 3,
+                        padding: 1,
+                        border: 0,
+                        background: "transparent",
+                        color: "var(--red)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {errorExpanded ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <span style={{ fontSize: 14, color: isSelected ? "var(--accent)" : "var(--text3)" }}>▶</span>
@@ -202,36 +230,54 @@ function VariantCard({
             </div>
           )}
 
-          {referenceImagePath && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setShowReference(true);
-              }}
-              title={t("video.referenceImageUsed")}
-              aria-label={t("video.referenceImageUsed")}
+          {coverImg && !isGenerating && (
+            <DownloadImageButton
+              imagePath={coverImg}
+              style={{ position: "absolute", top: 5, left: 5, zIndex: 3 }}
+              size={12}
+            />
+          )}
+
+          {referenceImagePaths.length > 0 && (
+            <div
               style={{
                 position: "absolute",
                 left: 5,
                 bottom: 5,
-                width: 30,
-                height: 30,
-                padding: 2,
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,0.75)",
-                borderRadius: 4,
-                background: "rgba(0,0,0,0.72)",
-                cursor: "pointer",
+                display: "flex",
+                gap: 3,
                 zIndex: 2,
               }}
             >
-              <img
-                src={`/api/files/${referenceImagePath}`}
-                alt={t("video.referenceImageUsed")}
-                style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", borderRadius: 2 }}
-              />
-            </button>
+              {referenceImagePaths.map((imagePath) => (
+                <button
+                  key={imagePath}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPreviewReference(imagePath);
+                  }}
+                  title={t("video.referenceImageUsed")}
+                  aria-label={t("video.referenceImageUsed")}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    padding: 1,
+                    overflow: "hidden",
+                    border: "1px solid rgba(255,255,255,0.75)",
+                    borderRadius: 4,
+                    background: "rgba(0,0,0,0.72)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <img
+                    src={`/api/files/${imagePath}`}
+                    alt={t("video.referenceImageUsed")}
+                    style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", borderRadius: 2 }}
+                  />
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -263,59 +309,6 @@ function VariantCard({
             </span>
           )}
         </div>
-
-        {isFailed && (
-          <div
-            role="alert"
-            title={errorMessage}
-            style={{
-              padding: "6px 7px",
-              background: "var(--red-dim)",
-              borderTop: "0.5px solid var(--red)",
-              borderRadius: "0 0 4px 4px",
-              color: "var(--red)",
-              fontSize: 9,
-              lineHeight: 1.4,
-              overflowWrap: "anywhere",
-            }}
-          >
-            <div
-              style={errorExpanded ? undefined : {
-                display: "-webkit-box",
-                WebkitBoxOrient: "vertical",
-                WebkitLineClamp: 3,
-                overflow: "hidden",
-              }}
-            >
-              {errorMessage}
-            </div>
-            {errorMessage.length > 90 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setErrorExpanded((expanded) => !expanded);
-                }}
-                title={errorExpanded ? t("video.hideError") : t("video.showFullError")}
-                aria-label={errorExpanded ? t("video.hideError") : t("video.showFullError")}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "100%",
-                  marginTop: 3,
-                  padding: 1,
-                  border: 0,
-                  background: "transparent",
-                  color: "var(--red)",
-                  cursor: "pointer",
-                }}
-              >
-                {errorExpanded ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Delete ✕ — top right, on hover */}
         {hovered && (
@@ -353,10 +346,10 @@ function VariantCard({
           onClose={() => setShowPlayer(false)}
         />
       )}
-      {showReference && referenceImagePath && (
+      {previewReference && (
         <MediaPreviewModal
-          imagePath={referenceImagePath}
-          onClose={() => setShowReference(false)}
+          imagePath={previewReference}
+          onClose={() => setPreviewReference(null)}
         />
       )}
     </>

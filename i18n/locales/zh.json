@@ -21,6 +21,8 @@
     "deselect": "取消选择",
     "name": "名称",
     "view": "查看",
+    "download": "下载",
+    "downloadFailed": "无法下载图片",
     "dragFiles": "拖入文件",
     "uploading": "上传中...",
     "closeEsc": "关闭 (ESC)",
@@ -28,7 +30,6 @@
   },
   "nav": {
     "films": "影片",
-    "settings": "设置",
     "backTo": "返回"
   },
   "film": {
@@ -65,6 +66,10 @@
     "uploadStory": "上传故事文件 (.md, .txt)",
     "enriching": "AI 分析中...",
     "enrichSuccess": "分析完成",
+    "exportVideo": "导出本集视频",
+    "exportingVideo": "正在导出...",
+    "exportComplete": "视频导出完成！正在下载...",
+    "exportFailed": "视频导出失败",
     "createNew": "新建剧集",
     "nameLabel": "剧集名称",
     "namePlaceholder": "例：第 1 集 — 开始",
@@ -105,6 +110,7 @@
     "scenePreview": "场景列表",
     "sceneTitle": "场景标题",
     "scenePrompt": "场景描述",
+    "sceneNegativePrompt": "场景负面提示词",
     "revisionPlaceholder": "让 AI 重写，例如：让结局更具戏剧性...",
     "regenerate": "重新生成",
     "regenerating": "重新生成中...",
@@ -120,11 +126,21 @@
     "scene": "场景",
     "generate": "生成视频",
     "generatingVideo": "正在生成视频...",
+    "enhanceSceneDescription": "使用 AI 丰富场景描述",
+    "enhancingSceneDescription": "AI 正在丰富场景描述...",
+    "sceneDescriptionEnhanced": "场景描述已增强",
+    "simplifySceneDescription": "使用 AI 简化场景描述",
+    "simplifyingSceneDescription": "AI 正在简化场景描述...",
+    "sceneDescriptionSimplified": "场景描述已简化",
     "addVariant": "生成新版本",
     "variants": "视频版本",
     "selectMain": "设为主版本",
     "selectedScene": "当前选中场景",
     "sceneNumber": "场景 {n}",
+    "addScene": "添加场景",
+    "arrangeScenes": "自动排列",
+    "arrangingScenes": "正在排列...",
+    "scenesArranged": "场景已重新排列",
     "addToScene": "+ 添加到场景",
     "charactersAndObjects": "角色与对象",
     "initialReferenceImage": "初始参考图",
@@ -148,12 +164,11 @@
     "noGenerationResponse": "图片服务未返回结果",
     "referenceImageCount": "{count} 张图片",
     "generateAnotherImage": "再生成一张",
-    "uploadReferenceImageHint": "点击或拖入 JPG、PNG、WEBP · 每张最大 15 MB",
+    "uploadReferenceImageHint": "上传此场景的视觉内容参考图（JPG、PNG、WEBP，最大 15 MB）。在第一个场景中，最新图片也会用作视频开场帧。",
     "referenceImageUploaded": "已上传 {count} 张参考图",
-    "selectForVideo": "用于视频",
-    "selectedForVideo": "正在用于视频",
-    "referenceImageSelected": "已选择参考图",
-    "noGeneratedReferenceImages": "暂无参考图"
+    "noGeneratedReferenceImages": "暂无参考图",
+    "usePreviousFirstFrame": "使用上一视频的 first_frame",
+    "usePreviousFirstFrameHint": "将上一场景的最后一帧用作此视频的开场帧"
   },
   "object": {
     "types": {
@@ -197,68 +212,9 @@
   },
   "params": {
     "description": "场景描述",
+    "negativePrompt": "负面提示词",
+    "negativePromptPlaceholder": "例如：模糊、身份漂移、手部变形、多余文字、镜头抖动...",
     "duration": "时长"
-  },
-  "settings": {
-    "title": "设置",
-    "sections": {
-      "comfyui": "ComfyUI",
-      "agnes": "Agnes AI",
-      "models": "模型",
-      "ai": "AI 提供商",
-      "storage": "存储",
-      "about": "关于"
-    },
-    "comfyui": {
-      "url": "服务器地址",
-      "timeout": "超时（秒）",
-      "test": "测试",
-      "connected": "已连接",
-      "disconnected": "未连接"
-    },
-    "agnes": {
-      "apiKeyWarning": "API 密钥从 .env 中的 AGNES_AI_API_KEY 读取 — 不通过此界面保存。",
-      "imageProvider": "图像提供商（默认）",
-      "videoProvider": "视频提供商（默认）",
-      "imageModel": "图像模型",
-      "videoModel": "视频模型",
-      "modelHint": "可以为每个场景/对象单独选择提供商 — 这里只是初始默认值。",
-      "test": "测试",
-      "connected": "已连接",
-      "disconnected": "未连接"
-    },
-    "models": {
-      "imageModel": "图像模型",
-      "videoModel": "视频模型",
-      "vae": "VAE",
-      "distilledLora": "Distilled LoRA",
-      "reload": "从 ComfyUI 重新加载",
-      "selectModel": "-- 选择模型 --",
-      "selectLora": "-- 选择 LoRA --",
-      "loadError": "无法加载模型列表。请检查 ComfyUI 是否运行。"
-    },
-    "ai": {
-      "provider": "提供商",
-      "apiUrl": "API 地址",
-      "apiKey": "API 密钥",
-      "model": "模型",
-      "apiKeyWarning": "API 密钥从 .env 文件读取 — 不通过此界面保存。",
-      "modelPlaceholder": "gpt-4o, gemini-pro, llama3...",
-      "providers": {
-        "openai": "OpenAI / OpenAI 兼容",
-        "ollama": "Ollama"
-      }
-    },
-    "storage": {
-      "path": "存储路径",
-      "directoryStructure": "目录结构",
-      "fileServeInfo": "文件通过 /api/files/[...path] 提供服务 — 路径不直接暴露。"
-    },
-    "about": {
-      "version": "VDF v1.0.0",
-      "description": "AI 视频制作应用。",
-      "techStack": "使用 ComfyUI + LTX Video / Wan2.2 / SVD 从文本故事创建影片。"
-    }
   },
   "generation": {
     "provider": "提供商"

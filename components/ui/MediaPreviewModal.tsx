@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { IconX } from "@tabler/icons-react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { DownloadImageButton } from "./DownloadImageButton";
 
 interface Props {
   imagePath?: string | null;
@@ -42,9 +43,14 @@ export function MediaPreviewModal({
       aria-label={t("common.view")}
     >
       <div className="media-preview-content" onClick={(event) => event.stopPropagation()}>
-        <button className="icon-btn" onClick={onClose} title={t("common.closeEsc")}>
-          <IconX size={17} />
-        </button>
+        <div className="media-preview-toolbar">
+          {resolvedImagePath && (
+            <DownloadImageButton imagePath={resolvedImagePath} className="icon-btn" size={16} />
+          )}
+          <button className="icon-btn" onClick={onClose} title={t("common.closeEsc")}>
+            <IconX size={17} />
+          </button>
+        </div>
         {resolvedVideoPath ? (
           <video src={`/api/files/${resolvedVideoPath}`} controls autoPlay loop />
         ) : resolvedImagePath ? (

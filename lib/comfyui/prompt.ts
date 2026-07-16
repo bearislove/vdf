@@ -1,5 +1,5 @@
+import fs from "fs";
 import { resolveStoragePath } from "@/lib/storage";
-import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
 
@@ -14,38 +14,58 @@ export function buildPrompt(basePrompt: string | null | undefined, objectLinks: 
   return descs.length > 0 ? `${base}. ${descs.join(", ")}` : base;
 }
 
-/**
- * Resolve which local image (absolute path) should drive image-to-video generation:
- * the previous scene's last frame when chaining is on, otherwise the main character's ref image.
- */
-export function resolveFirstFrameImage(
-  scene: Pick<Scene, "useLastFrameChaining" | "compositeImagePath"> & { objectLinks?: ObjectLinks },
+function existingStorageImage(relativePath: string | null | undefined): string | undefined {
+  if (!relativePath) return undefined;
+  try {
+    const absolutePath = resolveStoragePath(relativePath);
+    return fs.existsSync(absolutePath) ? absolutePath : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The only video start image is the previous scene's final frame. */
+export function resolvePreviousSceneFirstFrame(
   previousVariant?: Pick<VideoVariant, "lastFramePath"> | null
 ): string | undefined {
-  if (scene.compositeImagePath) {
-    return resolveStoragePath(scene.compositeImagePath);
-  }
-  if (scene.useLastFrameChaining && previousVariant?.lastFramePath) {
-    return resolveStoragePath(previousVariant.lastFramePath);
-  }
-  const mainChar = (scene.objectLinks ?? []).find((l) => l.object?.type === "CHARACTER")?.object;
-  const mainImg = mainChar?.refImages?.find((i) => i.isMain) ?? mainChar?.refImages?.[0];
-  return mainImg?.path ? resolveStoragePath(mainImg.path) : undefined;
+  return existingStorageImage(previousVariant?.lastFramePath);
 }
 
 const MAX_REFERENCE_IMAGES = 4;
 
 /**
- * Resolve absolute paths of each linked object's main ref image, for use as
- * multi-image references when generating a scene's composite image.
+ * Resolve absolute, existing paths of each linked object's main (else first) ref image —
+ * the single source of truth for "ảnh nhận dạng của object", dùng chung cho cả luồng
+ * tạo ảnh scene lẫn ảnh tham chiếu gửi provider video.
  */
-export function resolveReferenceImagePaths(objectLinks: ObjectLinks): string[] {
+export function resolveObjectReferenceImagePaths(
+  objectLinks: ObjectLinks,
+  opts: {
+    /** Chỉ lấy các object này (mặc định: tất cả) */
+    objectIds?: ReadonlySet<string>;
+    /** Xếp CHARACTER lên trước — dùng khi số ảnh bị giới hạn và nhân vật cần ưu tiên */
+    characterFirst?: boolean;
+    limit?: number;
+  } = {}
+): string[] {
+  let links = (objectLinks ?? []).filter(
+    (link) => !opts.objectIds || (link.object && opts.objectIds.has(link.object.id))
+  );
+  if (opts.characterFirst) {
+    links = [...links].sort(
+      (a, b) => Number(b.object?.type === "CHARACTER") - Number(a.object?.type === "CHARACTER")
+    );
+  }
   const paths: string[] = [];
-  for (const link of objectLinks ?? []) {
+  for (const link of links) {
     const img = link.object?.refImages?.find((i) => i.isMain) ?? link.object?.refImages?.[0];
     if (!img?.path) continue;
-    const abs = resolveStoragePath(img.path);
-    if (!paths.includes(abs)) paths.push(abs);
+    try {
+      const abs = resolveStoragePath(img.path);
+      if (fs.existsSync(abs) && !paths.includes(abs)) paths.push(abs);
+    } catch {
+      // path không hợp lệ (traversal) → bỏ qua ảnh này
+    }
   }
-  return paths.slice(0, MAX_REFERENCE_IMAGES);
+  return paths.slice(0, opts.limit ?? MAX_REFERENCE_IMAGES);
 }
