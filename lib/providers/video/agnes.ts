@@ -115,7 +115,6 @@ export class AgnesVideoProvider implements VideoProvider {
           negativePrompt: providerNegativePrompt ?? "",
           imageCount: images.length,
           contentReferenceCount: 1 + ctx.contentReferenceImagePaths.length,
-          providerCredentialId: job.credentialId ?? "",
         },
         referenceImagePaths: [
           ...images

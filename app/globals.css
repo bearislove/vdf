@@ -360,6 +360,8 @@ input::placeholder, textarea::placeholder {
 
 .episode-form-grid { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; }
 .episode-title-field { grid-column: 1 / -1; }
+.episode-provider-field { display: flex; align-items: center; gap: 8px; }
+.episode-provider-field .form-label { margin: 0; }
 
 .episode-ai-toggle {
   display: flex;
@@ -399,7 +401,8 @@ input::placeholder, textarea::placeholder {
 }
 .episode-preview-section-title span:last-child { color: var(--text3); font-weight: 400; text-transform: none; }
 
-.episode-revision-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 7px; margin-top: 8px; }
+.episode-revision-field { margin-top: 10px; }
+.episode-revision-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 7px; }
 .episode-revision-bar textarea { min-height: 48px; resize: vertical; }
 .episode-revision-bar .btn { align-self: stretch; }
 
@@ -409,13 +412,25 @@ input::placeholder, textarea::placeholder {
 .episode-element-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 5px; }
 .episode-element-icon.character { color: var(--accent); background: var(--accent-dim); }
 .episode-element-icon.environment { color: var(--green); background: var(--green-dim); }
+.episode-element-fields { min-width: 0; }
+.episode-field-label {
+  display: block;
+  margin: 0 0 3px;
+  color: var(--text3);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.episode-element-fields .episode-field-label:not(:first-child) { margin-top: 7px; }
 .episode-element input { border: 0; background: transparent; padding: 0; font-weight: 600; }
-.episode-element textarea { min-height: 52px; margin-top: 3px; resize: vertical; font-size: 10px; }
+.episode-element textarea { min-height: 52px; resize: vertical; font-size: 10px; }
 
 .episode-scenes-editor { padding: 10px 16px 16px; border-top: 1px solid var(--border); }
 .episode-scenes-list { border-top: 1px solid var(--border); }
 .episode-scene-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 110px; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .episode-scene-number { color: var(--accent); font-family: monospace; font-size: 11px; padding-top: 6px; }
+.episode-scene-fields { display: grid; gap: 9px; }
+.episode-field-group { min-width: 0; }
 .episode-scene-fields input { border: 0; background: transparent; padding: 2px 0 5px; font-weight: 600; }
 .episode-scene-fields textarea { min-height: 68px; resize: vertical; line-height: 1.5; }
 .episode-scene-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 5px; }

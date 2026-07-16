@@ -111,6 +111,7 @@
     "sceneTitle": "场景标题",
     "scenePrompt": "场景描述",
     "sceneNegativePrompt": "场景负面提示词",
+    "revisionLabel": "AI 修改要求",
     "revisionPlaceholder": "让 AI 重写，例如：让结局更具戏剧性...",
     "regenerate": "重新生成",
     "regenerating": "重新生成中...",

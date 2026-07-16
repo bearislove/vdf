@@ -111,6 +111,7 @@
     "sceneTitle": "Scene title",
     "scenePrompt": "Scene description",
     "sceneNegativePrompt": "Scene negative prompt",
+    "revisionLabel": "AI revision request",
     "revisionPlaceholder": "Ask AI for a rewrite, e.g. make the ending more dramatic...",
     "regenerate": "Regenerate",
     "regenerating": "Regenerating...",

@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import type { TextProviderName } from "@/lib/providers/types";
 
 interface Props {
+  id?: string;
   value: TextProviderName;
   onChange: (value: TextProviderName) => void;
   disabled?: boolean;
   ariaLabel?: string;
 }
 
-export function TextProviderSelect({ value, onChange, disabled, ariaLabel }: Props) {
+export function TextProviderSelect({ id, value, onChange, disabled, ariaLabel }: Props) {
   const [options, setOptions] = useState<Array<{ name: TextProviderName; label: string }>>([
     { name: "openai", label: "OpenAI compatible" },
     { name: "ollama", label: "Ollama" },
@@ -39,6 +40,7 @@ export function TextProviderSelect({ value, onChange, disabled, ariaLabel }: Pro
 
   return (
     <select
+      id={id}
       value={value}
       onChange={(event) => onChange(event.target.value as TextProviderName)}
       disabled={disabled}
@@ -50,4 +52,3 @@ export function TextProviderSelect({ value, onChange, disabled, ariaLabel }: Pro
     </select>
   );
 }
-

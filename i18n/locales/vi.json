@@ -111,6 +111,7 @@
     "sceneTitle": "Tên cảnh",
     "scenePrompt": "Mô tả cảnh",
     "sceneNegativePrompt": "Negative prompt của cảnh",
+    "revisionLabel": "Yêu cầu chỉnh sửa bằng AI",
     "revisionPlaceholder": "Yêu cầu AI viết lại, ví dụ: tăng kịch tính ở đoạn kết...",
     "regenerate": "Tạo lại",
     "regenerating": "Đang tạo lại...",

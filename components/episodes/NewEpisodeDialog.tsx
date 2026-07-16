@@ -200,8 +200,9 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
         {!analysis ? (
           <div className="episode-dialog-form">
             <div className="episode-story-field">
-              <label className="form-label">{t("episode.storyLabel")} *</label>
+              <label className="form-label" htmlFor="episode-story">{t("episode.storyLabel")} *</label>
               <textarea
+                id="episode-story"
                 value={storyText}
                 onChange={(event) => setStoryText(event.target.value)}
                 placeholder={t("episode.storyPlaceholder")}
@@ -243,16 +244,18 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
 
             <div className="episode-form-grid">
               <div className="episode-title-field">
-                <label className="form-label">{t("episode.nameLabel")} *</label>
+                <label className="form-label" htmlFor="episode-title">{t("episode.nameLabel")} *</label>
                 <input
+                  id="episode-title"
                   value={form.title}
                   onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
                   placeholder={t("episode.namePlaceholder")}
                 />
               </div>
               <div>
-                <label className="form-label">{t("episode.durationLabel")}</label>
+                <label className="form-label" htmlFor="episode-duration">{t("episode.durationLabel")}</label>
                 <input
+                  id="episode-duration"
                   type="number"
                   min={0}
                   step={10}
@@ -263,8 +266,9 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
               </div>
               {!form.useAI && (
                 <div>
-                  <label className="form-label">{t("episode.splitScenesLabel")}</label>
+                  <label className="form-label" htmlFor="episode-scene-count">{t("episode.splitScenesLabel")}</label>
                   <input
+                    id="episode-scene-count"
                     type="number"
                     min={1}
                     max={500}
@@ -286,43 +290,51 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
               <span>{t("episode.aiPreviewOption")}</span>
             </label>
             {form.useAI && (
-              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="form-label" style={{ margin: 0 }}>{t("generation.provider")}</span>
+              <div className="episode-provider-field">
+                <label className="form-label" htmlFor="episode-text-provider">{t("generation.provider")}</label>
                 <TextProviderSelect
+                  id="episode-text-provider"
                   value={textProvider}
                   onChange={setTextProvider}
                   disabled={busy}
                   ariaLabel={t("generation.provider")}
                 />
-              </label>
+              </div>
             )}
           </div>
         ) : (
           <div className="episode-preview-body">
             <div className="episode-preview-top">
               <section className="episode-plot-editor">
-                <div className="episode-preview-section-title">
+                <label className="episode-preview-section-title" htmlFor="episode-enriched-story">
                   <span>{t("episode.plotPreview")}</span>
                   <span>{analysis.storyEnriched.split(/\s+/).filter(Boolean).length.toLocaleString()} {t("common.words")}</span>
-                </div>
+                </label>
                 <textarea
+                  id="episode-enriched-story"
                   value={analysis.storyEnriched}
                   onChange={(event) => setAnalysis({ ...analysis, storyEnriched: event.target.value })}
                 />
-                <div className="episode-revision-bar">
-                  <textarea
-                    value={revisionRequest}
-                    onChange={(event) => setRevisionRequest(event.target.value)}
-                    placeholder={t("episode.revisionPlaceholder")}
-                  />
-                  <button
-                    className="btn"
-                    onClick={() => analyzeStory(true)}
-                    disabled={analyzing || !revisionRequest.trim()}
-                  >
-                    <IconRefresh className={analyzing ? "loading-spinner" : ""} size={15} />
-                    {analyzing ? t("episode.regenerating") : t("episode.regenerate")}
-                  </button>
+                <div className="episode-revision-field">
+                  <label className="form-label" htmlFor="episode-revision-request">
+                    {t("episode.revisionLabel")}
+                  </label>
+                  <div className="episode-revision-bar">
+                    <textarea
+                      id="episode-revision-request"
+                      value={revisionRequest}
+                      onChange={(event) => setRevisionRequest(event.target.value)}
+                      placeholder={t("episode.revisionPlaceholder")}
+                    />
+                    <button
+                      className="btn"
+                      onClick={() => analyzeStory(true)}
+                      disabled={analyzing || !revisionRequest.trim()}
+                    >
+                      <IconRefresh className={analyzing ? "loading-spinner" : ""} size={15} />
+                      {analyzing ? t("episode.regenerating") : t("episode.regenerate")}
+                    </button>
+                  </div>
                 </div>
               </section>
 
@@ -336,16 +348,22 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
                       <div className={`episode-element-icon ${object.type}`}>
                         {object.type === "character" ? <IconUser size={15} /> : <IconMapPin size={15} />}
                       </div>
-                      <div>
+                      <div className="episode-element-fields">
+                        <label className="episode-field-label" htmlFor={`episode-object-${index}-name`}>
+                          {t("common.name")}
+                        </label>
                         <input
+                          id={`episode-object-${index}-name`}
                           value={object.name}
                           onChange={(event) => updateObject(index, { name: event.target.value })}
-                          aria-label={t("common.name")}
                         />
+                        <label className="episode-field-label" htmlFor={`episode-object-${index}-description`}>
+                          {t("episode.description")}
+                        </label>
                         <textarea
+                          id={`episode-object-${index}-description`}
                           value={object.description_en}
                           onChange={(event) => updateObject(index, { description_en: event.target.value })}
-                          aria-label={t("episode.description")}
                         />
                       </div>
                     </div>
@@ -364,27 +382,42 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
                   <article className="episode-scene-row" key={scene.id}>
                     <span className="episode-scene-number">{String(index + 1).padStart(2, "0")}</span>
                     <div className="episode-scene-fields">
-                      <input
-                        value={scene.title}
-                        onChange={(event) => updateScene(index, { title: event.target.value })}
-                        aria-label={t("episode.sceneTitle")}
-                        required
-                      />
-                      <textarea
-                        value={scene.prompt_en}
-                        onChange={(event) => updateScene(index, { prompt_en: event.target.value })}
-                        aria-label={t("episode.scenePrompt")}
-                        required
-                        minLength={10}
-                      />
-                      <textarea
-                        value={scene.negative_prompt}
-                        onChange={(event) => updateScene(index, { negative_prompt: event.target.value })}
-                        aria-label={t("episode.sceneNegativePrompt")}
-                        placeholder={t("params.negativePromptPlaceholder")}
-                        required
-                        minLength={3}
-                      />
+                      <div className="episode-field-group">
+                        <label className="episode-field-label" htmlFor={`episode-scene-${index}-title`}>
+                          {t("episode.sceneTitle")}
+                        </label>
+                        <input
+                          id={`episode-scene-${index}-title`}
+                          value={scene.title}
+                          onChange={(event) => updateScene(index, { title: event.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="episode-field-group">
+                        <label className="episode-field-label" htmlFor={`episode-scene-${index}-prompt`}>
+                          {t("episode.scenePrompt")}
+                        </label>
+                        <textarea
+                          id={`episode-scene-${index}-prompt`}
+                          value={scene.prompt_en}
+                          onChange={(event) => updateScene(index, { prompt_en: event.target.value })}
+                          required
+                          minLength={10}
+                        />
+                      </div>
+                      <div className="episode-field-group">
+                        <label className="episode-field-label" htmlFor={`episode-scene-${index}-negative-prompt`}>
+                          {t("episode.sceneNegativePrompt")}
+                        </label>
+                        <textarea
+                          id={`episode-scene-${index}-negative-prompt`}
+                          value={scene.negative_prompt}
+                          onChange={(event) => updateScene(index, { negative_prompt: event.target.value })}
+                          placeholder={t("params.negativePromptPlaceholder")}
+                          required
+                          minLength={3}
+                        />
+                      </div>
                     </div>
                     <div className="episode-scene-meta">
                       <span>{scene.shot_type}</span>
