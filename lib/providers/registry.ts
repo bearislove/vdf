@@ -1,8 +1,8 @@
 import { OpenAICompatibleLLMProvider } from "@/lib/providers/llm/openai-compatible";
+import { AgnesLLMProvider } from "@/lib/providers/llm/agnes";
 import { AgnesImageProvider } from "@/lib/providers/image/agnes";
 import { ComfyUIImageProvider } from "@/lib/providers/image/comfyui";
 import { AgnesVideoProvider } from "@/lib/providers/video/agnes";
-import { getAgnesPrimaryApiKey } from "@/lib/providers/agnes-credentials";
 import { ComfyUIVideoProvider } from "@/lib/providers/video/comfyui";
 import { ProviderRegistry } from "@/lib/providers/provider-registry";
 import type {
@@ -40,9 +40,7 @@ const textProviders = new ProviderRegistry<
     { label: "Ollama", capabilities: { chatCompletion: true } }
   )
   .register(
-    new OpenAICompatibleLLMProvider({
-      name: "agnes",
-      apiKey: getAgnesPrimaryApiKey(),
+    new AgnesLLMProvider({
       baseURL: process.env.AGNES_AI_BASE_URL ?? "https://apihub.agnes-ai.com/v1",
       model: process.env.AGNES_AI_TEXT_MODEL ?? "agnes-2.0-flash",
     }),

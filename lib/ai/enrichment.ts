@@ -32,16 +32,9 @@ export const ObjectsSchema = z.object({
   objects: z.array(
     z.object({
       id: z.string(),
-      type: z.enum(["character", "prop", "environment"]),
+      type: z.enum(["character", "environment"]),
       name: z.string(),
       description_en: z.string(),
-    })
-  ),
-  links: z.array(
-    z.object({
-      scene_id: z.string(),
-      object_ids: z.array(z.string()),
-      roles: z.record(z.string(), z.enum(["main", "present", "mentioned"])).optional(),
     })
   ),
 });
@@ -53,7 +46,6 @@ export const EnrichmentSchema = z.object({
   storyEnriched: z.string().min(1),
   scenes: SceneSchema.shape.scenes.min(1),
   objects: ObjectsSchema.shape.objects,
-  links: ObjectsSchema.shape.links,
 });
 
 export type EnrichmentResult = z.infer<typeof EnrichmentSchema>;
@@ -110,16 +102,16 @@ export async function runEnrichment(
     SceneSchema
   );
 
-  // Call 3: Extract objects + links — pass existing objects so AI reuses exact names
-  const { objects, links } = await callWithRetry(
+  // Call 3: Extract reusable film-level objects. Scenes are not auto-linked.
+  const { objects } = await callWithRetry(
     () =>
       callAI(
         provider,
         SYSTEM_PRODUCTION,
-        promptExtractObjects(storyEnriched, JSON.stringify({ scenes }), existingObjects)
+        promptExtractObjects(storyEnriched, existingObjects)
       ),
     ObjectsSchema
   );
 
-  return { storyEnriched, scenes, objects, links };
+  return { storyEnriched, scenes, objects };
 }

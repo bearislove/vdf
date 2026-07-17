@@ -10,6 +10,7 @@
     "error": "An error occurred",
     "success": "Success",
     "retry": "Retry",
+    "stop": "Stop",
     "close": "Close",
     "back": "Back",
     "confirm": "Confirm",
@@ -174,9 +175,7 @@
     "dropToReplaceInitialImage": "Drop to replace the reference image",
     "noGenerationResponse": "Image provider returned no result",
     "referenceImageCount": "{count} images",
-    "referenceImageUploaded": "{count} reference images uploaded",
-    "usePreviousFirstFrame": "Use first_frame from previous video",
-    "usePreviousFirstFrameHint": "Use the previous scene's last frame as this video's opening frame"
+    "referenceImageUploaded": "{count} reference images uploaded"
   },
   "object": {
     "types": {

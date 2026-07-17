@@ -11,10 +11,12 @@ export function imageGenerationSSEResponse(
   saveImage: (buffer: Buffer) => Promise<string>
 ): Response {
   const encoder = new TextEncoder();
+  let cancelled = false;
 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: object) => {
+        if (cancelled) return;
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); } catch { /* ignore */ }
       };
 
@@ -22,6 +24,7 @@ export function imageGenerationSSEResponse(
         onStatus: (message) => send({ type: "status", message }),
         onProgress: (step, total) => send({ type: "progress", step, total }),
         onDone: async (buffer) => {
+          if (cancelled) return;
           try {
             const path = await saveImage(buffer);
             send({ type: "done", path });
@@ -33,6 +36,9 @@ export function imageGenerationSSEResponse(
       });
 
       try { controller.close(); } catch { /* ignore */ }
+    },
+    cancel() {
+      cancelled = true;
     },
   });
 

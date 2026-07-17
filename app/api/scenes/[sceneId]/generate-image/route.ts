@@ -155,9 +155,8 @@ export async function POST(
     return NextResponse.json({ error }, { status: 400 });
   }
 
-  const objectLinks = scene.objectLinks as unknown as Parameters<typeof buildPrompt>[1];
   const requestedPrompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
-  const basePrompt = requestedPrompt || buildPrompt(scene.promptEnOverride ?? scene.promptEn, objectLinks);
+  const basePrompt = requestedPrompt || buildPrompt(scene.promptEnOverride ?? scene.promptEn);
   const provider = getImageProvider(
     resolveImageProviderForReferences(body.provider, referenceImagePaths.length)
   );

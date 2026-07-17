@@ -1,34 +1,12 @@
 import fs from "fs";
 import { resolveStoragePath } from "@/lib/storage";
 import type { StoryObject } from "@/types/object";
-import type { VideoVariant } from "@/types/video";
 
 type ObjectLinks = Array<{ role: string; strengthHint?: number; object: StoryObject }> | undefined;
 
-/** Build enriched prompt by appending linked object descriptions if not already present */
-export function buildPrompt(basePrompt: string | null | undefined, objectLinks: ObjectLinks): string {
-  const base = (basePrompt ?? "").trim();
-  const descs = (objectLinks ?? [])
-    .map((l) => l.object?.descriptionEn?.trim())
-    .filter((d): d is string => !!d && !base.includes(d));
-  return descs.length > 0 ? `${base}. ${descs.join(", ")}` : base;
-}
-
-function existingStorageImage(relativePath: string | null | undefined): string | undefined {
-  if (!relativePath) return undefined;
-  try {
-    const absolutePath = resolveStoragePath(relativePath);
-    return fs.existsSync(absolutePath) ? absolutePath : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The only video start image is the previous scene's final frame. */
-export function resolvePreviousSceneFirstFrame(
-  previousVariant?: Pick<VideoVariant, "lastFramePath"> | null
-): string | undefined {
-  return existingStorageImage(previousVariant?.lastFramePath);
+/** Keep scene text independent from linked object identity sheets. */
+export function buildPrompt(basePrompt: string | null | undefined): string {
+  return (basePrompt ?? "").trim();
 }
 
 const MAX_REFERENCE_IMAGES = 4;

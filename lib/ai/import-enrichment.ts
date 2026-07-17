@@ -11,13 +11,6 @@ export async function importEnrichment(
   const objects = analysis.objects.filter(
     (object) => object.type === "character" || object.type === "environment"
   );
-  const allowedObjectIds = new Set(objects.map((object) => object.id));
-  const links = analysis.links
-    .map((link) => ({
-      ...link,
-      object_ids: link.object_ids.filter((id) => allowedObjectIds.has(id)),
-    }))
-    .filter((link) => link.object_ids.length > 0);
 
   await tx.scene.deleteMany({ where: { episodeId } });
 
@@ -81,12 +74,9 @@ export async function importEnrichment(
   const existingByName = new Map(
     existingObjects.map((object) => [object.name.toLocaleLowerCase(), object])
   );
-  const objectMap = new Map<string, string>();
-
   for (const object of objects) {
     const nameKey = object.name.toLocaleLowerCase();
     const existing = existingByName.get(nameKey);
-    let objectId = existing?.id;
     if (existing) {
       if (existing.descriptionEn !== object.description_en) {
         await tx.storyObject.update({
@@ -103,27 +93,7 @@ export async function importEnrichment(
           descriptionEn: object.description_en,
         },
       });
-      objectId = created.id;
       existingByName.set(nameKey, created);
-    }
-    objectMap.set(object.id, objectId as string);
-  }
-
-  for (const link of links) {
-    const sceneId = sceneMap.get(link.scene_id);
-    if (!sceneId) continue;
-    for (const temporaryObjectId of link.object_ids) {
-      const objectId = objectMap.get(temporaryObjectId);
-      if (!objectId) continue;
-      await tx.sceneObjectLink.upsert({
-        where: { sceneId_objectId: { sceneId, objectId } },
-        create: {
-          sceneId,
-          objectId,
-          role: link.roles?.[temporaryObjectId] ?? "present",
-        },
-        update: { role: link.roles?.[temporaryObjectId] ?? "present" },
-      });
     }
   }
 

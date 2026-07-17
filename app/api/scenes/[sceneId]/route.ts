@@ -36,7 +36,6 @@ export async function PUT(req: NextRequest, { params }: { params: { sceneId: str
       transitionsTo: body.transitionsTo,
       selectedVideoId: body.selectedVideoId,
       videoParams: body.videoParams,
-      useLastFrameChaining: body.useLastFrameChaining,
       canvasX: body.canvasX,
       canvasY: body.canvasY,
     },

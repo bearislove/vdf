@@ -92,6 +92,10 @@ Schema:
 shot_type values: wide | medium | close | aerial | pov
 
 For every scene, write a specific negative_prompt as a concise comma-separated English list. Exclude likely generation failures such as anatomy errors, identity drift, unwanted subjects or text, continuity errors, camera artifacts, and motion defects. Do not negate anything required by prompt_en.
+Scene prompt rules:
+- Describe the visible story beat, action, setting, camera, lighting, and mood for that scene.
+- Refer to recurring characters and environments by stable names only.
+- Do NOT embed character biographies, full physical identity sheets, wardrobe catalogs, or reusable environment descriptions in prompt_en. Those belong to the separate object catalog.
 
 Story:
 ${storyEnriched}`;
@@ -99,7 +103,6 @@ ${storyEnriched}`;
 
 export function promptExtractObjects(
   storyEnriched: string,
-  scenesJson: string,
   existingObjects: Array<{ name: string; type: string; description_en: string }> = []
 ): string {
   const existingBlock =
@@ -112,12 +115,14 @@ ${existingObjects.map((o) => `- [${o.type}] "${o.name}": ${o.description_en || "
 `
       : "";
 
-  return `Extract characters (people) and environments from the story and link them to scenes. Return ONLY valid JSON.
+  return `Extract the reusable film-level object catalog from the story. Return ONLY valid JSON.
 
 RULES:
 - Only extract type "character" (human or humanoid beings) and type "environment" (locations, settings, backgrounds).
 - Do NOT extract props, objects, items, weapons, vehicles, or any non-living things.
 - Focus on what will be visible as a consistent element across multiple scenes.
+- Do NOT link objects to scenes. Do NOT return scene membership, scene IDs, roles, or per-scene object lists.
+- Keep each description as reusable visual identity/reference material for image generation, not a scene action prompt.
 ${existingBlock}
 Schema:
 {
@@ -125,20 +130,11 @@ Schema:
     "id": "obj_1",
     "type": "character",
     "name": "...",
-    "description_en": "detailed English physical description for image generation"
-  }],
-  "links": [{
-    "scene_id": "scene_1",
-    "object_ids": ["obj_1", "obj_2"],
-    "roles": {"obj_1": "main", "obj_2": "present"}
+    "description_en": "detailed English reusable visual description for image generation"
   }]
 }
 
 type values: character | environment
-role values: main | present | mentioned
-
-Scenes JSON:
-${scenesJson}
 
 Story:
 ${storyEnriched}`;

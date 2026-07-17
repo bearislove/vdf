@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import sharp from "sharp";
 import {
   getAgnesCredential,
+  getAgnesCredentialCount,
   getAgnesPrimaryCredential,
   getNextAgnesCredential,
 } from "@/lib/providers/agnes-credentials";
@@ -236,13 +237,16 @@ function authHeaders(credential: AgnesCredential): Record<string, string> {
   return { Authorization: `Bearer ${credential.apiKey}`, "Content-Type": "application/json" };
 }
 
+function shouldRetryAgnesStatus(status: number): boolean {
+  return [429, 500, 502, 503, 504].includes(status);
+}
+
 /** Convert visual content references into a video prompt without treating them as video keyframes. */
 export async function agnesGroundVideoPrompt(
   scenePrompt: string,
   referenceImagePaths: string[]
 ): Promise<string> {
   if (referenceImagePaths.length === 0) return scenePrompt;
-  const credential = getNextAgnesCredential("text");
   const imageDataUris = await Promise.all(
     referenceImagePaths.slice(0, 4).map((imagePath) => fileToVisionDataUri(imagePath))
   );
@@ -271,7 +275,9 @@ ${scenePrompt}`,
   });
   let response: Response | undefined;
   let responseDetail = "";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const maxAttempts = Math.max(3, getAgnesCredentialCount());
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const credential = getNextAgnesCredential("text");
     try {
       response = await fetch(`${AGNES_BASE_URL}/chat/completions`, {
         method: "POST",
@@ -281,10 +287,10 @@ ${scenePrompt}`,
       });
       if (response.ok) break;
       responseDetail = await response.text().catch(() => "");
-      if (![500, 502, 503, 504].includes(response.status)) break;
+      if (![429, 500, 502, 503, 504].includes(response.status)) break;
     } catch (error) {
       responseDetail = toErrorMessage(error);
-      if (attempt === 2) break;
+      if (attempt === maxAttempts - 1) break;
     }
     await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
   }
@@ -293,7 +299,7 @@ ${scenePrompt}`,
     const upstreamDetail = /cannot connect to host|connection reset/i.test(responseDetail)
       ? "Agnes upstream không thể tải ảnh"
       : compactUploadResponse(responseDetail) || "không có chi tiết";
-    throw new Error(`Agnes AI phân tích ảnh tham chiếu thất bại sau 3 lần thử (${status}): ${upstreamDetail}`);
+    throw new Error(`Agnes AI phân tích ảnh tham chiếu thất bại sau ${maxAttempts} lần thử (${status}): ${upstreamDetail}`);
   }
   const data = await response.json();
   const groundedPrompt = data?.choices?.[0]?.message?.content;
@@ -313,24 +319,33 @@ export interface AgnesImageParams {
 }
 
 export async function agnesGenerateImage(params: AgnesImageParams): Promise<Buffer> {
-  const credential = getNextAgnesCredential("image");
   const extraBody: Record<string, unknown> = { response_format: "b64_json" };
   if (params.referenceImagePaths?.length) {
     extraBody.image = await Promise.all(params.referenceImagePaths.map((p) => fileToDataUri(p)));
   }
-  const res = await fetch(`${AGNES_BASE_URL}/images/generations`, {
-    method: "POST",
-    headers: authHeaders(credential),
-    body: JSON.stringify({
-      model: params.model || AGNES_IMAGE_MODEL,
-      prompt: params.prompt,
-      size: `${params.width ?? 512}x${params.height ?? 512}`,
-      extra_body: extraBody,
-    }),
-    signal: AbortSignal.timeout(120000),
+  const requestBody = JSON.stringify({
+    model: params.model || AGNES_IMAGE_MODEL,
+    prompt: params.prompt,
+    size: `${params.width ?? 512}x${params.height ?? 512}`,
+    extra_body: extraBody,
   });
-  if (!res.ok) {
-    throw new Error(`Agnes AI /images/generations failed: ${res.status} ${await res.text().catch(() => "")}`);
+  let res: Response | undefined;
+  let responseText = "";
+  const maxAttempts = Math.max(1, getAgnesCredentialCount());
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const credential = getNextAgnesCredential("image");
+    res = await fetch(`${AGNES_BASE_URL}/images/generations`, {
+      method: "POST",
+      headers: authHeaders(credential),
+      body: requestBody,
+      signal: AbortSignal.timeout(120000),
+    });
+    if (res.ok) break;
+    responseText = await res.text().catch(() => "");
+    if (!shouldRetryAgnesStatus(res.status)) break;
+  }
+  if (!res?.ok) {
+    throw new Error(`Agnes AI /images/generations failed: ${res?.status ?? "network"} ${responseText}`);
   }
   const data = await res.json();
   const item = data?.data?.[0];
@@ -373,7 +388,6 @@ export interface AgnesVideoJob {
 const MAX_VIDEO_REFERENCE_IMAGES = 3;
 
 export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesVideoJob> {
-  const credential = getNextAgnesCredential("video");
   const body: Record<string, unknown> = {
     model: AGNES_VIDEO_MODEL,
     prompt: params.prompt,
@@ -406,14 +420,25 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
     body.extra_body = { image: urls, mode: "keyframes" };
   }
 
-  const res = await fetch(`${AGNES_BASE_URL}/videos`, {
-    method: "POST",
-    headers: authHeaders(credential),
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!res.ok) {
-    throw new Error(`Agnes AI /videos failed: ${res.status} ${await res.text().catch(() => "")}`);
+  const requestBody = JSON.stringify(body);
+  let res: Response | undefined;
+  let responseText = "";
+  let credential: AgnesCredential | undefined;
+  const maxAttempts = Math.max(1, getAgnesCredentialCount());
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    credential = getNextAgnesCredential("video");
+    res = await fetch(`${AGNES_BASE_URL}/videos`, {
+      method: "POST",
+      headers: authHeaders(credential),
+      body: requestBody,
+      signal: AbortSignal.timeout(30000),
+    });
+    if (res.ok) break;
+    responseText = await res.text().catch(() => "");
+    if (!shouldRetryAgnesStatus(res.status)) break;
+  }
+  if (!res?.ok || !credential) {
+    throw new Error(`Agnes AI /videos failed: ${res?.status ?? "network"} ${responseText}`);
   }
   const data = await res.json();
   const taskId = data.task_id ?? data.id ?? data.video_id;

@@ -11,9 +11,11 @@ const MISSING_CREDENTIALS_ERROR =
   "AGNES_AI_API_KEY hoặc AGNES_AI_API_KEYS chưa được cấu hình trong .env";
 
 function parseCredentialPool(rawValue: string | undefined): string[] {
-  const value = rawValue?.trim();
+  const value = rawValue?.trim().replace(/^['"]|['"]$/g, "");
   if (!value) return [];
-  if (!value.startsWith("[")) return value.split(/[\n,]+/);
+  if (!value.startsWith("[")) {
+    return value.split(/[\n,]+/).map((key) => key.trim().replace(/^['"]|['"]$/g, ""));
+  }
 
   let parsed: unknown;
   try {
@@ -78,6 +80,6 @@ export function getAgnesPrimaryCredential(): AgnesCredential | undefined {
   return credentials[0];
 }
 
-export function getAgnesPrimaryApiKey(): string {
-  return getAgnesPrimaryCredential()?.apiKey ?? "";
+export function getAgnesCredentialCount(): number {
+  return credentials.length;
 }

@@ -62,8 +62,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
   const [enhancingDescription, setEnhancingDescription] = useState(false);
   const [simplifyingDescription, setSimplifyingDescription] = useState(false);
   const [isSvdModel, setIsSvdModel] = useState(false);
-  const [useLastFrameChaining, setUseLastFrameChaining] = useState(scene.useLastFrameChaining);
-  const [savingChaining, setSavingChaining] = useState(false);
 
   useEffect(() => {
     fetch("/api/config")
@@ -85,7 +83,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
     const nextParams = getSavedParams(scene);
     setSimpleParams(nextParams);
     setSavedParams(nextParams);
-    setUseLastFrameChaining(scene.useLastFrameChaining);
     // A different scene has its own independently persisted editor state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene.id]);
@@ -117,23 +114,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
     ["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"].includes(variant.status)
   ) ?? false;
   const isVideoGenerating = generating || hasActiveVideo;
-  const hasPreviousFrame = !!(previousScene?.selectedVideo?.lastFramePath ||
-    previousScene?.videoVariants?.some((variant) => variant.status === "DONE" && variant.lastFramePath));
-
-  const handleToggleLastFrameChaining = useCallback(async (enabled: boolean) => {
-    const previousValue = useLastFrameChaining;
-    setUseLastFrameChaining(enabled);
-    setSavingChaining(true);
-    try {
-      await apiPut(`/api/scenes/${scene.id}`, { useLastFrameChaining: enabled });
-      onUpdate();
-    } catch (error) {
-      setUseLastFrameChaining(previousValue);
-      addToast("error", error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingChaining(false);
-    }
-  }, [scene.id, useLastFrameChaining, addToast, onUpdate]);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
@@ -141,7 +121,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
       await apiPost("/api/videos", {
         sceneId: scene.id,
         provider: genProvider,
-        useLastFrameChaining,
         params: {
           promptEn: prompt,
           negativePrompt: negativePrompt.trim(),
@@ -156,7 +135,7 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
     } finally {
       setGenerating(false);
     }
-  }, [scene.id, prompt, negativePrompt, duration, simpleParams.aspectRatio, genProvider, useLastFrameChaining, onUpdate, addToast, t]);
+  }, [scene.id, prompt, negativePrompt, duration, simpleParams.aspectRatio, genProvider, onUpdate, addToast, t]);
 
   const handleSave = useCallback(async () => {
     const normalizedPrompt = prompt.trim();
@@ -233,9 +212,18 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
     onUpdate();
   };
 
-  const handleRecoverVariant = async (variantId: string) => {
-    await fetch(`/api/videos/${variantId}/recover`, { method: "POST" });
-    onUpdate();
+  const handleRetryVariant = async (variantId: string) => {
+    try {
+      const response = await fetch(`/api/videos/${variantId}/retry`, { method: "POST" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload.error === "string" ? payload.error : `Retry failed (${response.status})`);
+      }
+      addToast("info", t("video.queuedMessage"));
+      onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    }
   };
 
   return (
@@ -334,27 +322,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
 
         <div className="divider" />
 
-        <label
-          className={`scene-chaining-switch ${useLastFrameChaining && hasPreviousFrame ? "is-active" : ""}`}
-          title={hasPreviousFrame ? t("canvas.usePreviousFirstFrameHint") : t("canvas.noPreviousFrame")}
-        >
-          <span>
-            <span>{t("canvas.usePreviousFirstFrame")}</span>
-            <small>
-              {hasPreviousFrame ? t("canvas.usePreviousFirstFrameHint") : t("canvas.noPreviousFrame")}
-            </small>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={useLastFrameChaining && hasPreviousFrame}
-            disabled={isVideoGenerating || savingChaining || !hasPreviousFrame}
-            onChange={(event) => handleToggleLastFrameChaining(event.target.checked)}
-          />
-        </label>
-
-        <div className="divider" />
-
         <div style={{ display: "flex", alignItems: "stretch", gap: 7, marginBottom: 10 }}>
           <label style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 10, color: "var(--text2)", flexShrink: 0 }}>
@@ -401,7 +368,7 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
               sceneId={scene.id}
               onSelect={handleSelectVariant}
               onDelete={handleDeleteVariant}
-              onRecover={handleRecoverVariant}
+              onRetry={handleRetryVariant}
             />
           </>
         )}

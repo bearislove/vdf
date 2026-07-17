@@ -63,10 +63,7 @@ export class AgnesVideoProvider implements VideoProvider {
 
   async runVideoGeneration(ctx: VideoGenContext, hooks: VideoGenHooks): Promise<void> {
     const { scene, videoParams } = ctx;
-    const scenePrompt = buildPrompt(
-      (videoParams.promptEn as string) || scene.promptEnOverride || scene.promptEn,
-      scene.objectLinks
-    );
+    const scenePrompt = buildPrompt((videoParams.promptEn as string) || scene.promptEnOverride || scene.promptEn);
     const { width, height } = resolveDimensions(videoParams);
     const inputImagePath = ctx.inputImagePath;
     if (!inputImagePath) {

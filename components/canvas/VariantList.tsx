@@ -20,7 +20,7 @@ interface VariantListProps {
   sceneId: string;
   onSelect: (variantId: string) => void;
   onDelete: (variantId: string) => void;
-  onRecover: (variantId: string) => Promise<void>;
+  onRetry: (variantId: string) => Promise<void>;
 }
 
 function readableError(detail: string | null, fallback: string): string {
@@ -44,7 +44,7 @@ function readableError(detail: string | null, fallback: string): string {
   return detail;
 }
 
-export function VariantList({ variants, selectedVideoId, onSelect, onDelete, onRecover }: VariantListProps) {
+export function VariantList({ variants, selectedVideoId, onSelect, onDelete, onRetry }: VariantListProps) {
   const { t } = useTranslation();
 
   if (variants.length === 0) return null;
@@ -66,7 +66,7 @@ export function VariantList({ variants, selectedVideoId, onSelect, onDelete, onR
             isSelected={v.id === selectedVideoId}
             onSelect={() => onSelect(v.id)}
             onDelete={() => onDelete(v.id)}
-            onRecover={() => onRecover(v.id)}  // returns Promise — VariantCard awaits it
+            onRetry={() => onRetry(v.id)}
           />
         ))}
       </div>
@@ -79,19 +79,19 @@ function VariantCard({
   isSelected,
   onSelect,
   onDelete,
-  onRecover,
+  onRetry,
 }: {
   variant: VideoVariant;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
-  onRecover: () => Promise<void>;
+  onRetry: () => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [showPlayer, setShowPlayer] = useState(false);
   const [previewReference, setPreviewReference] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
-  const [recovering, setRecovering] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [errorExpanded, setErrorExpanded] = useState(false);
   const snapshot = variant.paramsSnapshot as Record<string, unknown>;
   const seed = snapshot?.seed ?? "?";
@@ -112,14 +112,14 @@ function VariantCard({
     (variant.videoPath?.endsWith(".webp") ? variant.videoPath : null);
   const hasMedia = !!(variant.videoPath || coverImg);
 
-  const handleRecover = async (event: MouseEvent<HTMLButtonElement>) => {
+  const handleRetry = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (recovering) return;
-    setRecovering(true);
+    if (retrying) return;
+    setRetrying(true);
     try {
-      await onRecover();
+      await onRetry();
     } finally {
-      setRecovering(false);
+      setRetrying(false);
     }
   };
 
@@ -353,11 +353,11 @@ function VariantCard({
         {hovered && isFailed && (
           <button
             type="button"
-            onClick={handleRecover}
-            disabled={recovering}
+            onClick={handleRetry}
+            disabled={retrying}
             title={t("common.retry")}
             aria-label={t("common.retry")}
-            aria-busy={recovering}
+            aria-busy={retrying}
             style={{
               position: "absolute",
               top: -6,
@@ -368,7 +368,7 @@ function VariantCard({
               border: "1.5px solid var(--bg1)",
               background: "var(--accent)",
               color: "#000",
-              cursor: recovering ? "default" : "pointer",
+              cursor: retrying ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -376,7 +376,7 @@ function VariantCard({
               zIndex: 10,
             }}
           >
-            {recovering
+            {retrying
               ? <IconLoader2 size={12} className="loading-spinner" aria-hidden="true" />
               : <IconRefresh size={12} aria-hidden="true" />}
           </button>

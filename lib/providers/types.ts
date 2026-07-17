@@ -66,7 +66,7 @@ export interface VideoGenContext {
   episodeId: string;
   /** Required scene image that drives image-to-video generation. */
   inputImagePath?: string;
-  /** Optional final frame from the previous scene, controlled by useLastFrameChaining. */
+  /** Optional provider-level first frame input when a caller explicitly supplies one. */
   firstFrameImagePath?: string;
   firstFrameSource: "none" | "previous_scene";
   /** Visual content references from Initial reference image; never first/last keyframes. */

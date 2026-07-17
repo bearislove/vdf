@@ -10,6 +10,7 @@
     "error": "Đã xảy ra lỗi",
     "success": "Thành công",
     "retry": "Thử lại",
+    "stop": "Dừng",
     "close": "Đóng",
     "back": "Quay lại",
     "confirm": "Xác nhận",
@@ -174,9 +175,7 @@
     "dropToReplaceInitialImage": "Thả để thay ảnh tham chiếu",
     "noGenerationResponse": "Nhà cung cấp không trả về ảnh",
     "referenceImageCount": "Có {count} ảnh",
-    "referenceImageUploaded": "Đã tải lên {count} ảnh tham chiếu",
-    "usePreviousFirstFrame": "Dùng first_frame từ video trước",
-    "usePreviousFirstFrameHint": "Dùng frame cuối của scene trước làm frame mở đầu video"
+    "referenceImageUploaded": "Đã tải lên {count} ảnh tham chiếu"
   },
   "object": {
     "types": {

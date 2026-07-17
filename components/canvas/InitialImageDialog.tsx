@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconCheck, IconEye, IconFileImport, IconLoader2, IconPhotoPlus, IconTrash } from "@tabler/icons-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IconCheck, IconEye, IconFileImport, IconLoader2, IconPhotoPlus, IconPlayerStop, IconTrash } from "@tabler/icons-react";
 import {
   InitialImageReferencePicker,
   type InitialImageSource,
@@ -46,6 +46,7 @@ export function InitialImageDialog({
 }: InitialImageDialogProps) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
+  const generationAbortRef = useRef<AbortController | null>(null);
   const objectOptions = useMemo(() => (
     (scene.objectLinks ?? []).flatMap((link) => {
       return (link.object.refImages ?? []).map((image, index) => ({
@@ -141,6 +142,12 @@ export function InitialImageDialog({
   }, [scene.id]);
 
   useEffect(() => {
+    return () => {
+      generationAbortRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (previewGeneratedPath) {
@@ -165,6 +172,8 @@ export function InitialImageDialog({
 
   const handleGenerate = async () => {
     if (!canGenerate || busy) return;
+    const abortController = new AbortController();
+    generationAbortRef.current = abortController;
     setGenerating(true);
     setError("");
     setProgress(t("canvas.preparingInitialImage"));
@@ -174,6 +183,7 @@ export function InitialImageDialog({
       const response = await fetch(`/api/scenes/${scene.id}/generate-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           source,
           referenceImages: source === "objects"
@@ -226,14 +236,26 @@ export function InitialImageDialog({
         }
       });
 
-      if (!completed) throw new Error(t("canvas.noGenerationResponse"));
+      if (!completed && !abortController.signal.aborted) throw new Error(t("canvas.noGenerationResponse"));
     } catch (generationError) {
+      if (abortController.signal.aborted) {
+        setProgress("");
+        return;
+      }
       const message = generationError instanceof Error ? generationError.message : String(generationError);
       setError(message);
       setProgress("");
     } finally {
+      if (generationAbortRef.current === abortController) generationAbortRef.current = null;
       setGenerating(false);
     }
+  };
+
+  const handleStopGeneration = () => {
+    generationAbortRef.current?.abort();
+    generationAbortRef.current = null;
+    setGenerating(false);
+    setProgress("");
   };
 
   const handleUpload = async (files: FileList) => {
@@ -366,6 +388,19 @@ export function InitialImageDialog({
               ? t("canvas.generatingInitialImage")
               : t("canvas.generateInitialImage")}
           </button>
+          {generating && (
+            <button
+              type="button"
+              className="btn"
+              onClick={handleStopGeneration}
+              title={t("common.stop")}
+              aria-label={t("common.stop")}
+              style={{ color: "var(--red)" }}
+            >
+              <IconPlayerStop size={14} />
+              {t("common.stop")}
+            </button>
+          )}
           <button
             type="button"
             className="btn-p"

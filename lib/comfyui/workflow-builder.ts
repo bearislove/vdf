@@ -59,10 +59,7 @@ export async function buildWorkflow(params: BuildWorkflowParams): Promise<{
     process.env.DEFAULT_VIDEO_MODEL ||
     "svd_xt.safetensors";
 
-  const promptEn = buildPrompt(
-    (videoParams.promptEn as string) || scene.promptEnOverride || scene.promptEn,
-    scene.objectLinks,
-  );
+  const promptEn = buildPrompt((videoParams.promptEn as string) || scene.promptEnOverride || scene.promptEn);
   const negativePrompt = typeof videoParams.negativePrompt === "string"
     ? videoParams.negativePrompt
     : scene.negativePrompt;
