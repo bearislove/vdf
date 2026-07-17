@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import {
   IconAlertTriangle,
   IconChevronDown,
@@ -110,6 +111,17 @@ function VariantCard({
   const coverImg = variant.lastFramePath || variant.thumbnailPath ||
     (variant.videoPath?.endsWith(".webp") ? variant.videoPath : null);
   const hasMedia = !!(variant.videoPath || coverImg);
+
+  const handleRecover = async (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (recovering) return;
+    setRecovering(true);
+    try {
+      await onRecover();
+    } finally {
+      setRecovering(false);
+    }
+  };
 
   return (
     <>
@@ -335,6 +347,38 @@ function VariantCard({
             }}
           >
             ✕
+          </button>
+        )}
+
+        {hovered && isFailed && (
+          <button
+            type="button"
+            onClick={handleRecover}
+            disabled={recovering}
+            title={t("common.retry")}
+            aria-label={t("common.retry")}
+            aria-busy={recovering}
+            style={{
+              position: "absolute",
+              top: -6,
+              left: -6,
+              width: 20,
+              height: 20,
+              borderRadius: "50%",
+              border: "1.5px solid var(--bg1)",
+              background: "var(--accent)",
+              color: "#000",
+              cursor: recovering ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              lineHeight: 1,
+              zIndex: 10,
+            }}
+          >
+            {recovering
+              ? <IconLoader2 size={12} className="loading-spinner" aria-hidden="true" />
+              : <IconRefresh size={12} aria-hidden="true" />}
           </button>
         )}
       </div>

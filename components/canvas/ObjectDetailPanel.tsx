@@ -33,22 +33,25 @@ type ImageTab = "reference" | "generated";
 
 export function ObjectDetailPanel({ object, onUpdate }: Props) {
   const { t } = useTranslation();
-  const { selectObject } = useCanvasStore();
+  const {
+    selectObject,
+    objectImageGenerations,
+    startObjectImageGeneration,
+    updateObjectImageGeneration,
+    finishObjectImageGeneration,
+  } = useCanvasStore();
   const { addToast } = useAppStore();
   const [name, setName] = useState(object.name);
   const [description, setDescription] = useState(object.descriptionEn);
   const [imageTab, setImageTab] = useState<ImageTab>("reference");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState("");
   const [generationProvider, setGenerationProvider] = useState<GenerationProviderName>("agnes");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     setName(object.name);
     setDescription(object.descriptionEn);
-    setGenerationProgress("");
     setImageTab("reference");
   }, [object.id, object.name, object.descriptionEn]);
 
@@ -69,6 +72,8 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
   const visibleImages = imageTab === "reference" ? referenceImages : generatedImages;
   const mainImage = images.find((image) => image.isMain) ?? images[0];
   const hasChanges = name.trim() !== object.name || description.trim() !== object.descriptionEn;
+  const generationProgress = objectImageGenerations[object.id]?.progress ?? "";
+  const generating = Boolean(objectImageGenerations[object.id]);
 
   const objectType = useMemo(() => {
     if (object.type === "CHARACTER") {
@@ -118,15 +123,16 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
   }
 
   async function handleGenerateImage() {
+    const objectId = object.id;
     const prompt = description.trim() || name.trim();
     if (!prompt) {
       addToast("error", t("object.descriptionRequired"));
       return;
     }
-    setGenerating(true);
-    setGenerationProgress(t("common.processing"));
+    if (objectImageGenerations[objectId]) return;
+    startObjectImageGeneration(objectId, t("common.processing"));
     try {
-      const response = await fetch(`/api/objects/${object.id}/generate-image`, {
+      const response = await fetch(`/api/objects/${objectId}/generate-image`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,11 +151,10 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
           const step = event.step ?? 0;
           const total = event.total ?? 0;
           const percent = total > 0 ? Math.round((step / total) * 100) : 0;
-          setGenerationProgress(`${step}/${total} (${percent}%)`);
+          updateObjectImageGeneration(objectId, `${step}/${total} (${percent}%)`);
         } else if (event.type === "status") {
-          setGenerationProgress(event.message ?? "...");
+          updateObjectImageGeneration(objectId, event.message ?? "...");
         } else if (event.type === "done") {
-          setGenerationProgress("");
           addToast("success", t("object.imageGenerated"));
           await onUpdate();
         } else if (event.type === "error") {
@@ -158,9 +163,8 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
       });
     } catch (error) {
       addToast("error", String(error));
-      setGenerationProgress("");
     } finally {
-      setGenerating(false);
+      finishObjectImageGeneration(objectId);
     }
   }
 

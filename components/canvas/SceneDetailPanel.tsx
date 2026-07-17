@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { IconDeviceFloppy, IconLoader2, IconPlayerPlay, IconSparkles, IconTextDecrease, IconTextIncrease } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconLoader2, IconPlayerPlay, IconTextDecrease, IconTextIncrease } from "@tabler/icons-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useTranslation } from "@/hooks/useTranslation";
 import { apiPut, apiPost } from "@/lib/utils/api";

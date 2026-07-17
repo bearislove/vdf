@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconCheck, IconFileImport, IconLoader2, IconPhotoPlus, IconTrash } from "@tabler/icons-react";
+import { IconCheck, IconEye, IconFileImport, IconLoader2, IconPhotoPlus, IconTrash } from "@tabler/icons-react";
 import {
   InitialImageReferencePicker,
   type InitialImageSource,
@@ -9,6 +9,7 @@ import {
   type UploadedReferenceOption,
 } from "./InitialImageReferencePicker";
 import { ModalDialog } from "@/components/ui/ModalDialog";
+import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
 import { GenerationProviderSelect } from "@/components/ui/GenerationProviderSelect";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAppStore } from "@/store/useAppStore";
@@ -79,6 +80,7 @@ export function InitialImageDialog({
   const [selectedGeneratedPath, setSelectedGeneratedPath] = useState<string | null>(
     scene.compositeImagePath
   );
+  const [previewGeneratedPath, setPreviewGeneratedPath] = useState<string | null>(null);
   const [removedObjectReferenceIds, setRemovedObjectReferenceIds] = useState<string[]>([]);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
@@ -140,11 +142,16 @@ export function InitialImageDialog({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) void handleClose();
+      if (event.key !== "Escape") return;
+      if (previewGeneratedPath) {
+        setPreviewGeneratedPath(null);
+        return;
+      }
+      if (!busy) void handleClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, handleClose]);
+  }, [busy, handleClose, previewGeneratedPath]);
 
   const toggleReference = (referenceId: string) => {
     setSelectedReferenceIds((current) =>
@@ -321,7 +328,8 @@ export function InitialImageDialog({
   };
 
   return (
-    <ModalDialog
+    <>
+      <ModalDialog
       title={t("canvas.initialImageDialogTitle")}
       icon={<IconPhotoPlus size={17} stroke={1.8} aria-hidden="true" />}
       headerMeta={(
@@ -480,6 +488,20 @@ export function InitialImageDialog({
                       <button
                         type="button"
                         className="icon-btn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setPreviewGeneratedPath(image.path);
+                        }}
+                        disabled={removing}
+                        title={t("common.view")}
+                        aria-label={t("common.view")}
+                        style={{ position: "absolute", right: 33, top: 5, width: 23, height: 23, background: "rgba(12, 12, 12, 0.8)", color: "#fff" }}
+                      >
+                        <IconEye size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
                         onClick={() => void handleRemoveGenerated(image.path)}
                         disabled={busy}
                         title={t("common.delete")}
@@ -500,6 +522,14 @@ export function InitialImageDialog({
               </div>
             )}
           </div>
-    </ModalDialog>
+      </ModalDialog>
+      {previewGeneratedPath && (
+        <MediaPreviewModal
+          imagePath={previewGeneratedPath}
+          alt={t("canvas.generatedImageLibrary")}
+          onClose={() => setPreviewGeneratedPath(null)}
+        />
+      )}
+    </>
   );
 }
