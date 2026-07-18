@@ -127,6 +127,15 @@ export function startVideoGeneration(params: {
   providerName: GenerationProviderName;
   baseCtx: Omit<VideoGenContext, "variantId">;
 }): void {
+  void runVideoGeneration(params);
+}
+
+/** Awaitable form used by concurrency-limited batch workers. */
+export async function runVideoGeneration(params: {
+  variantId: string;
+  providerName: GenerationProviderName;
+  baseCtx: Omit<VideoGenContext, "variantId">;
+}): Promise<void> {
   const provider = getVideoProvider(params.providerName);
   const ctx: VideoGenContext = { ...params.baseCtx, variantId: params.variantId };
   const hooks = buildVideoHooks({
@@ -136,5 +145,5 @@ export function startVideoGeneration(params: {
     sceneId: params.baseCtx.scene.id,
   });
 
-  void provider.runVideoGeneration(ctx, hooks).catch((e) => hooks.onError(toErrorMessage(e)));
+  await provider.runVideoGeneration(ctx, hooks).catch((e) => hooks.onError(toErrorMessage(e)));
 }

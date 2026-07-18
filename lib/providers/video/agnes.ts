@@ -55,10 +55,10 @@ function buildVideoNegativePrompt(sceneNegativePrompt: string | undefined, hasIm
 export class AgnesVideoProvider implements VideoProvider {
   readonly name = "agnes" as const;
 
-  validate(ctx: Omit<VideoGenContext, "variantId">): string | null {
-    return ctx.inputImagePath
-      ? null
-      : "Cần có Initial reference image của scene để tạo video";
+  validate(): string | null {
+    // Agnes supports both image-to-video and text-to-video. The absence of an
+    // Initial reference image intentionally selects text-to-video mode.
+    return null;
   }
 
   async runVideoGeneration(ctx: VideoGenContext, hooks: VideoGenHooks): Promise<void> {
@@ -66,31 +66,30 @@ export class AgnesVideoProvider implements VideoProvider {
     const scenePrompt = buildPrompt((videoParams.promptEn as string) || scene.promptEnOverride || scene.promptEn);
     const { width, height } = resolveDimensions(videoParams);
     const inputImagePath = ctx.inputImagePath;
-    if (!inputImagePath) {
-      await hooks.onError("Thiếu ảnh đầu vào cho image-to-video");
-      return;
-    }
 
     // Agnes accepts exactly one image for regular I2V. Multiple images are only
     // valid as 2-3 chronological keyframes, so auxiliary references stay in prompt grounding.
-    const images: AgnesVideoImageRef[] = ctx.firstFrameImagePath
+    const images: AgnesVideoImageRef[] = inputImagePath && ctx.firstFrameImagePath
       ? [
           { pathOrUrl: ctx.firstFrameImagePath, role: "first_frame" },
           { pathOrUrl: inputImagePath, role: "reference" },
         ]
-      : [{ pathOrUrl: inputImagePath, role: "reference" }];
-    const strategy = images.length > 1 ? "i2v_multi" : "i2v_single";
+      : inputImagePath
+        ? [{ pathOrUrl: inputImagePath, role: "reference" }]
+        : [];
+    const strategy = images.length > 1 ? "i2v_multi" : images.length === 1 ? "i2v_single" : "t2v";
     const sceneNegativePrompt = typeof videoParams.negativePrompt === "string"
       ? videoParams.negativePrompt
       : scene.negativePrompt;
-    const providerNegativePrompt = buildVideoNegativePrompt(sceneNegativePrompt, true);
+    const providerNegativePrompt = buildVideoNegativePrompt(sceneNegativePrompt, !!inputImagePath);
 
     try {
-      const groundedPrompt = await agnesGroundVideoPrompt(
-        scenePrompt,
-        [inputImagePath, ...ctx.contentReferenceImagePaths]
-      );
-      const providerPrompt = buildImageToVideoPrompt(groundedPrompt, !!ctx.firstFrameImagePath);
+      const groundedPrompt = inputImagePath
+        ? await agnesGroundVideoPrompt(scenePrompt, [inputImagePath, ...ctx.contentReferenceImagePaths])
+        : scenePrompt;
+      const providerPrompt = inputImagePath
+        ? buildImageToVideoPrompt(groundedPrompt, !!ctx.firstFrameImagePath)
+        : groundedPrompt;
       const job = await agnesSubmitVideo({
         prompt: providerPrompt,
         negativePrompt: providerNegativePrompt,
@@ -106,12 +105,12 @@ export class AgnesVideoProvider implements VideoProvider {
         externalJobId: job.videoId ?? job.taskId,
         providerCredentialId: job.credentialId,
         workflowSnapshot: {
-          mode: "image-to-video",
+          mode: inputImagePath ? "image-to-video" : "text-to-video",
           firstFrameSource: ctx.firstFrameSource,
           prompt: providerPrompt,
           negativePrompt: providerNegativePrompt ?? "",
           imageCount: images.length,
-          contentReferenceCount: 1 + ctx.contentReferenceImagePaths.length,
+          contentReferenceCount: (inputImagePath ? 1 : 0) + ctx.contentReferenceImagePaths.length,
         },
         referenceImagePaths: [
           ...images

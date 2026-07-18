@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { IconLoader2, IconMovie } from "@tabler/icons-react";
 import { Topbar } from "@/components/layout/Topbar";
 import { ObjectPanel } from "@/components/canvas/ObjectPanel";
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
 import { RightPanel } from "@/components/canvas/RightPanel";
+import { EpisodeVideoActions } from "@/components/episodes/EpisodeVideoActions";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useAppStore } from "@/store/useAppStore";
 import { useResizePanel } from "@/hooks/useResizePanel";
+import { sceneHasActiveVideo } from "@/lib/video/video-status";
 import type { Episode } from "@/types/episode";
 import type { Film } from "@/types/film";
 import type { Scene } from "@/types/scene";
@@ -20,7 +20,6 @@ interface Props {
 
 export default function EpisodePage({ params }: Props) {
   const { t } = useTranslation();
-  const { addToast } = useAppStore();
   const [film, setFilm] = useState<Film | null>(null);
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -29,8 +28,6 @@ export default function EpisodePage({ params }: Props) {
   const leftPanel = useResizePanel(386, 186, 520, "left");
   const rightPanel = useResizePanel(426, 126, 520, "right");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const GENERATING_STATUSES = new Set(["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"]);
 
   const load = useCallback(async () => {
     const [filmRes, epRes, objRes] = await Promise.all([
@@ -54,9 +51,7 @@ export default function EpisodePage({ params }: Props) {
 
   // Auto-poll every 3s while any scene has a GENERATING/QUEUED variant
   useEffect(() => {
-    const hasGenerating = scenes.some((s) =>
-      s.videoVariants?.some((v) => GENERATING_STATUSES.has(v.status))
-    );
+    const hasGenerating = scenes.some(sceneHasActiveVideo);
 
     if (hasGenerating && !pollRef.current) {
       pollRef.current = setInterval(async () => {
@@ -65,7 +60,7 @@ export default function EpisodePage({ params }: Props) {
         const res = await fetch(`/api/episodes/${params.episodeId}/sync-variants`, { method: "POST" });
         const newScenes: Scene[] = await res.json();
         setScenes(newScenes);
-        if (!newScenes.some((s) => s.videoVariants?.some((v) => GENERATING_STATUSES.has(v.status)))) {
+        if (!newScenes.some(sceneHasActiveVideo)) {
           clearInterval(pollRef.current!);
           pollRef.current = null;
         }
@@ -84,36 +79,6 @@ export default function EpisodePage({ params }: Props) {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  // Có ít nhất 1 scene đã có video DONE
-  const hasDoneVideo = scenes.some(
-    (s) =>
-      (s.selectedVideo as { status?: string } | null | undefined)?.status === "DONE" ||
-      s.videoVariants?.some((v) => v.status === "DONE")
-  );
-  const [merging, setMerging] = useState(false);
-
-  const handleMergeEpisode = useCallback(async () => {
-    setMerging(true);
-    try {
-      const res = await fetch("/api/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filmId: params.filmId, episodeIds: [params.episodeId] }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? t("episode.exportFailed"));
-      addToast("success", t("episode.exportComplete"));
-      const a = document.createElement("a");
-      a.href = data.outputUrl;
-      a.download = `${episode?.title ?? "episode"}.mp4`;
-      a.click();
-    } catch (e) {
-      addToast("error", String(e));
-    } finally {
-      setMerging(false);
-    }
-  }, [params.filmId, params.episodeId, episode?.title, addToast, t]);
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <Topbar
@@ -123,19 +88,13 @@ export default function EpisodePage({ params }: Props) {
           { label: episode?.title ?? "..." },
         ]}
         actions={
-          hasDoneVideo ? (
-            <button
-              className="btn"
-              onClick={handleMergeEpisode}
-              disabled={merging}
-              style={{ fontSize: 10 }}
-            >
-              {merging
-                ? <IconLoader2 size={14} className="loading-spinner" aria-hidden="true" />
-                : <IconMovie size={14} aria-hidden="true" />}
-              {merging ? t("episode.exportingVideo") : t("episode.exportVideo")}
-            </button>
-          ) : undefined
+          <EpisodeVideoActions
+            filmId={params.filmId}
+            episodeId={params.episodeId}
+            episodeTitle={episode?.title}
+            scenes={scenes}
+            onRefresh={load}
+          />
         }
       />
 

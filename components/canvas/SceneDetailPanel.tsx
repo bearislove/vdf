@@ -61,13 +61,10 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
   const [generating, setGenerating] = useState(false);
   const [enhancingDescription, setEnhancingDescription] = useState(false);
   const [simplifyingDescription, setSimplifyingDescription] = useState(false);
-  const [isSvdModel, setIsSvdModel] = useState(false);
-
   useEffect(() => {
     fetch("/api/config")
       .then((response) => response.json())
       .then((config) => {
-        setIsSvdModel(config.isSvd);
         if (config.defaultVideoProvider === "agnes" || config.defaultVideoProvider === "comfyui") {
           setGenProvider(config.defaultVideoProvider);
         }
@@ -237,22 +234,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-        {/* SVD model warning — prompt has no effect */}
-        {isSvdModel && (
-          <div style={{
-            background: "rgba(255, 150, 0, 0.08)",
-            border: "0.5px solid rgba(255, 150, 0, 0.4)",
-            borderRadius: 6,
-            padding: "8px 10px",
-            marginBottom: 10,
-            fontSize: 11,
-            color: "var(--accent)",
-            lineHeight: 1.5,
-          }}>
-            ⚠ Model hiện tại (<b>SVD</b>) không dùng mô tả văn bản — chỉ animate từ ảnh nhân vật. Các scene sẽ ra video giống nhau nếu dùng cùng ref image.<br />
-            <span style={{ color: "var(--text3)" }}>→ Cài WAN hoặc LTX Video model để dùng được prompt mô tả.</span>
-          </div>
-        )}
 
         {/* Prompt */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>

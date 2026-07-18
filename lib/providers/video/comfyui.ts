@@ -45,10 +45,9 @@ async function uploadImagesToComfyUI(imagePaths: string[]): Promise<void> {
 export class ComfyUIVideoProvider implements VideoProvider {
   readonly name = "comfyui" as const;
 
-  validate(ctx: Omit<VideoGenContext, "variantId">): string | null {
-    return ctx.inputImagePath
-      ? null
-      : "Cần có Initial reference image của scene để tạo video";
+  validate(): string | null {
+    // workflow-builder selects T2V when no first frame is available.
+    return null;
   }
 
   async runVideoGeneration(ctx: VideoGenContext, hooks: VideoGenHooks): Promise<void> {
