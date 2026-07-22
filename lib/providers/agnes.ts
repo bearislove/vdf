@@ -18,7 +18,7 @@ const AGNES_IMAGE_MODEL = process.env.AGNES_AI_IMAGE_MODEL ?? "agnes-image-2.1-f
 const AGNES_VIDEO_MODEL = process.env.AGNES_AI_VIDEO_MODEL ?? "agnes-video-v2.0";
 const AGNES_PUBLIC_MEDIA_BASE_URL = (process.env.AGNES_PUBLIC_MEDIA_BASE_URL ?? "").replace(/\/+$/, "");
 
-/** Agnes chấp nhận ảnh tham chiếu cạnh dài tối đa ~1536px; ảnh lớn hơn làm phồng payload và có thể bị từ chối */
+/** Agnes accepts reference images up to roughly 1536 px on the longest edge. */
 const REFERENCE_MAX_EDGE = 1536;
 const VISION_MAX_EDGE = 1024;
 
@@ -32,7 +32,7 @@ const MIME_BY_EXT: Record<string, string> = {
 async function referenceImageBuffer(absPath: string): Promise<{ buffer: Buffer; mime: string; ext: string }> {
   const ext = path.extname(absPath).toLowerCase();
   try {
-    // .rotate() không tham số = auto-rotate theo EXIF (re-encode sẽ strip EXIF nên bắt buộc phải xoay trước)
+    // An argument-less rotate applies EXIF orientation before re-encoding strips the metadata.
     const image = sharp(absPath)
       .rotate()
       .resize({
@@ -79,7 +79,7 @@ async function fileToVisionDataUri(absPath: string): Promise<string> {
 
 function compactUploadResponse(text: string): string {
   if (/<!doctype|<html|<style|:root\s*\{/i.test(text)) {
-    return "dịch vụ upload trả về trang lỗi";
+    return "the upload service returned an error page";
   }
   return text
     .replace(/<[^>]*>/g, " ")
@@ -175,29 +175,28 @@ async function uploadToFilebin(buffer: Buffer, filename: string, mime: string): 
   });
   const directUrl = redirect.headers.get("location");
   if (redirect.status < 300 || redirect.status >= 400 || !directUrl) {
-    throw new Error(`không lấy được URL ảnh trực tiếp (HTTP ${redirect.status})`);
+    throw new Error(`Could not resolve a direct image URL (HTTP ${redirect.status})`);
   }
   const parsedUrl = new URL(directUrl);
   if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "storage.filebin.net") {
-    throw new Error("dịch vụ upload trả về URL không hợp lệ");
+    throw new Error("The upload service returned an invalid URL");
   }
   return directUrl;
 }
 
-/** GET thử URL vừa upload: một số host trả về trang HTML thay vì file ảnh, Agnes fetch về sẽ lỗi */
+/** Verifies that an uploaded URL serves an image rather than an HTML hosting page. */
 async function assertUrlServesImage(url: string): Promise<void> {
   const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
   const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
   void res.body?.cancel().catch(() => {});
   if (!res.ok || !contentType.startsWith("image/")) {
-    throw new Error(`URL không trả về ảnh (HTTP ${res.status}, content-type: ${contentType || "không rõ"})`);
+    throw new Error(`URL did not return an image (HTTP ${res.status}, content-type: ${contentType || "unknown"})`);
   }
 }
 
 /**
- * Video API của Agnes chỉ nhận URL http(s) công khai — KHÔNG nhận base64/data-URI như API ảnh.
- * Ảnh local được resize ≤1536px. Production ưu tiên URL public của chính ứng dụng;
- * localhost dùng hosting tạm để Agnes fetch ảnh. Ảnh upload tạm có thể truy cập công khai qua URL đó.
+ * Agnes video accepts public HTTP(S) URLs, not base64/data URIs. Local images
+ * are resized to 1536 px and exposed through the app URL or a temporary host.
  */
 export async function uploadReferenceImageToCloud(absPath: string): Promise<string> {
   const ownPublicUrl = publicStorageUrl(absPath);
@@ -206,7 +205,7 @@ export async function uploadReferenceImageToCloud(absPath: string): Promise<stri
       await assertUrlServesImage(ownPublicUrl);
       return ownPublicUrl;
     } catch {
-      // Domain có thể chưa public route storage; tiếp tục qua các host tạm.
+      // The app storage route may not be public; continue with temporary hosts.
     }
   }
 
@@ -224,12 +223,12 @@ export async function uploadReferenceImageToCloud(absPath: string): Promise<stri
       return url;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      errors.push(`${name}: ${message === "fetch failed" ? "không thể kết nối" : message}`);
+      errors.push(`${name}: ${message === "fetch failed" ? "connection failed" : message}`);
     }
   }
   throw new Error(
-    `Không thể chuẩn bị ảnh tham chiếu cho Agnes AI. ${errors.join("; ")}. `
-    + "Khi deploy, hãy cấu hình AGNES_PUBLIC_MEDIA_BASE_URL bằng domain public của ứng dụng."
+    `Could not prepare the reference image for Agnes AI. ${errors.join("; ")}. `
+    + "In production, configure AGNES_PUBLIC_MEDIA_BASE_URL with the application's public domain."
   );
 }
 
@@ -297,9 +296,9 @@ ${scenePrompt}`,
   if (!response?.ok) {
     const status = response?.status ? `HTTP ${response.status}` : "network error";
     const upstreamDetail = /cannot connect to host|connection reset/i.test(responseDetail)
-      ? "Agnes upstream không thể tải ảnh"
-      : compactUploadResponse(responseDetail) || "không có chi tiết";
-    throw new Error(`Agnes AI phân tích ảnh tham chiếu thất bại sau ${maxAttempts} lần thử (${status}): ${upstreamDetail}`);
+      ? "Agnes upstream could not download the image"
+      : compactUploadResponse(responseDetail) || "no details";
+    throw new Error(`Agnes AI reference analysis failed after ${maxAttempts} attempts (${status}): ${upstreamDetail}`);
   }
   const data = await response.json();
   const groundedPrompt = data?.choices?.[0]?.message?.content;
@@ -351,13 +350,13 @@ export async function agnesGenerateImage(params: AgnesImageParams): Promise<Buff
   const item = data?.data?.[0];
   if (item?.b64_json) return Buffer.from(item.b64_json, "base64");
   if (item?.url) return agnesDownload(item.url);
-  throw new Error("Agnes AI response không có ảnh output");
+  throw new Error("Agnes AI returned no output image");
 }
 
 export type AgnesVideoImageRole = "first_frame" | "last_frame" | "reference";
 
 export interface AgnesVideoImageRef {
-  /** Absolute local file path (sẽ được upload lấy URL public) hoặc URL http(s) sẵn có */
+  /** Absolute local path to upload, or an existing HTTP(S) URL. */
   pathOrUrl: string;
   role?: AgnesVideoImageRole;
 }
@@ -371,9 +370,8 @@ export interface AgnesVideoParams {
   frameRate?: number;
   seed?: number;
   /**
-   * Ảnh video, tối đa 3. Mapping theo contract:
-   * 1 ảnh → body.image (image-to-video); 2-3 ảnh → extra_body.image,
-   * và nếu có role first_frame/last_frame → extra_body.mode = "keyframes".
+   * Up to three video images. One image maps to body.image; two or three map
+   * to extra_body.image, with keyframe mode for first/last-frame roles.
    */
   images?: AgnesVideoImageRef[];
 }
@@ -399,7 +397,7 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
   if (params.negativePrompt) body.negative_prompt = params.negativePrompt;
   if (params.seed !== undefined && params.seed >= 0) body.seed = params.seed;
 
-  // Upload các ảnh độc lập nhau — chạy song song để không cộng dồn độ trễ (mỗi ảnh gồm resize + POST + verify)
+  // Upload independent images concurrently to avoid accumulating upload latency.
   const refs = (params.images ?? [])
     .slice(0, MAX_VIDEO_REFERENCE_IMAGES)
     .flatMap((ref) => {
@@ -409,7 +407,7 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
   const roles = refs.map(({ role }) => role);
   const hasKeyframeRole = roles.some((role) => role === "first_frame" || role === "last_frame");
   if (refs.length > 1 && !hasKeyframeRole) {
-    throw new Error("Agnes AI chỉ nhận nhiều ảnh khi tạo video ở chế độ keyframes");
+    throw new Error("Agnes AI accepts multiple video images only in keyframe mode");
   }
   const urls = await Promise.all(refs.map(({ raw }) =>
     /^https?:\/\//i.test(raw) ? Promise.resolve(raw) : uploadReferenceImageToCloud(raw)
@@ -442,7 +440,7 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
   }
   const data = await res.json();
   const taskId = data.task_id ?? data.id ?? data.video_id;
-  if (!taskId) throw new Error("Agnes AI không trả về task_id");
+  if (!taskId) throw new Error("Agnes AI returned no task_id");
   return {
     taskId,
     videoId: data.video_id,
@@ -460,7 +458,7 @@ export interface AgnesVideoStatus {
 
 export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVideoStatus> {
   const credential = getAgnesCredential(job.credentialId);
-  // Prefer the video_id-based endpoint per docs (cần kèm model_name); fall back to the legacy task_id path.
+  // Prefer the documented video_id endpoint with model_name, then fall back to task_id.
   const url = job.videoId
     ? `${AGNES_BASE_URL.replace(/\/v1$/, "")}/agnesapi?${new URLSearchParams({
         video_id: job.videoId,
@@ -475,7 +473,7 @@ export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVide
     throw new Error(`Agnes AI status check failed: ${res.status} ${await res.text().catch(() => "")}`);
   }
   const data = await res.json();
-  // Agnes có thể trả error dạng object {code, message} — ép về string để lưu DB không bị Prisma từ chối
+  // Agnes may return {code, message}; normalize it before persisting through Prisma.
   const rawError = data.error ?? data.message;
   return {
     status: data.status,
@@ -496,7 +494,7 @@ export async function agnesPollVideo(
   onProgress?: (s: AgnesVideoStatus) => void,
   opts: { intervalMs?: number; timeoutMs?: number } = {}
 ): Promise<AgnesVideoStatus> {
-  // Backoff 5s → ×1.35 → tối đa 12s, theo hành vi tham chiếu của upstream
+  // Back off from 5 seconds by 1.35x, capped at 12 seconds.
   let interval = opts.intervalMs ?? 5000;
   const timeout = opts.timeoutMs ?? 20 * 60 * 1000;
   const start = Date.now();
@@ -507,12 +505,12 @@ export async function agnesPollVideo(
     await new Promise((r) => setTimeout(r, interval));
     interval = Math.min(interval * 1.35, 12000);
   }
-  return { status: "failed", progress: 0, error: "Timeout khi chờ Agnes AI xử lý video" };
+  return { status: "failed", progress: 0, error: "Timed out waiting for Agnes AI video generation" };
 }
 
 export async function agnesTestConnection(): Promise<{ ok: boolean; error?: string }> {
   const credential = getAgnesPrimaryCredential();
-  if (!credential) return { ok: false, error: "AGNES_AI_API_KEY hoặc AGNES_AI_API_KEYS chưa được cấu hình trong .env" };
+  if (!credential) return { ok: false, error: "AGNES_AI_API_KEY or AGNES_AI_API_KEYS is not configured in .env" };
   try {
     const res = await fetch(`${AGNES_BASE_URL}/chat/completions`, {
       method: "POST",

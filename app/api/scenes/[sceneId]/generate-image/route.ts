@@ -123,7 +123,7 @@ export async function POST(
   const referenceImagePaths = await resolveReferenceImages(scene, body);
   if (referenceImagePaths.length === 0) {
     return NextResponse.json(
-      { error: "Các ảnh tham chiếu được chọn không tồn tại hoặc không thuộc scene này" },
+      { error: "The selected reference images do not exist or do not belong to this scene" },
       { status: 400 }
     );
   }

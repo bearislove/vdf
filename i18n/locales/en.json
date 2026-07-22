@@ -106,6 +106,7 @@
     "enrichStep1": "Step 1/3 — Translate & expand story",
     "enrichStep2": "Step 2/3 — Analyze scenes",
     "enrichStep3": "Step 3/3 — Extract characters & objects",
+    "aiProcessing": "AI is processing",
     "noVideo": "Episode has no video",
     "deleteConfirm": "Delete this episode?",
     "fileTypeError": "Only .md and .txt files are supported",
@@ -149,6 +150,10 @@
     "arrangeScenes": "Auto arrange",
     "arrangingScenes": "Arranging...",
     "scenesArranged": "Scenes arranged",
+    "deleteSceneTitle": "Delete scene?",
+    "deleteTransitionTitle": "Delete transition?",
+    "deleteSceneMessage": "Delete {scene} and all of its videos?",
+    "deleteTransitionMessage": "Delete this scene transition?",
     "charactersAndObjects": "Characters & Objects",
     "initialReferenceImage": "Initial reference image",
     "videoInputImage": "Image-to-video input",
@@ -221,7 +226,8 @@
     "description": "Scene description",
     "negativePrompt": "Negative prompt",
     "negativePromptPlaceholder": "E.g. blurry, identity drift, distorted hands, unwanted text, camera shake...",
-    "duration": "Duration"
+    "duration": "Duration",
+    "aspectRatio": "Aspect ratio"
   },
   "generation": {
     "provider": "Provider"

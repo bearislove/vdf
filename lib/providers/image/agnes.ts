@@ -5,7 +5,7 @@ export class AgnesImageProvider implements ImageProvider {
   readonly name = "agnes" as const;
 
   async generateImage(input: ImageGenInput, hooks: ImageGenHooks): Promise<void> {
-    hooks.onStatus("Đang gửi tới Agnes AI...");
+    hooks.onStatus("Submitting to Agnes AI...");
     try {
       const buffer = await agnesGenerateImage({
         prompt: input.prompt,

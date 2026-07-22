@@ -3,6 +3,7 @@
 import { memo, useState, useEffect, useRef } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
+import { useTranslation } from "@/hooks/useTranslation";
 import type { VideoVariant } from "@/types/video";
 
 export interface VideoNodeData {
@@ -12,6 +13,7 @@ export interface VideoNodeData {
 
 export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeData>) {
   const { variant, sceneTitle } = data;
+  const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -193,7 +195,7 @@ export const VideoNode = memo(function VideoNode({ data }: NodeProps<VideoNodeDa
                 background: "var(--green)", flexShrink: 0,
               }}
             />
-            <span style={{ fontSize: 8, color: "var(--green)" }}>Video chính</span>
+            <span style={{ fontSize: 8, color: "var(--green)" }}>{t("video.main")}</span>
           </div>
         </div>
       </div>

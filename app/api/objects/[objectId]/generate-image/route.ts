@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_REFERENCE_IMAGES = 4;
 
-/** Ảnh gốc do người dùng upload (không phải ảnh AI đã tạo) — dùng làm reference cho AI, ảnh main xếp đầu */
+/** User-uploaded originals used as AI references, with the main image first. */
 function resolveObjectReferenceImages(refImages: RefImage[]): string[] {
   const originals = refImages.filter((img) => img.label !== "AI generated" && img.path);
   originals.sort((a, b) => Number(b.isMain ?? false) - Number(a.isMain ?? false));

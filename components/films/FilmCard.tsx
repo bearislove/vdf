@@ -20,7 +20,7 @@ interface FilmCardProps {
 const EP_COLORS = ["#FF9C2A", "#5B9CF6", "#2ECC71", "#E24B4A", "#C084FC", "#F59E0B", "#10B981"];
 
 export function FilmCard({ film, onDelete }: FilmCardProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const episodeCount = film._count?.episodes ?? film.episodes?.length ?? 0;
 
@@ -171,7 +171,7 @@ export function FilmCard({ film, onDelete }: FilmCardProps) {
             }}
           >
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>
-              {episodeCount} {t("film.episodes")} · {formatDate(film.updatedAt)}
+              {episodeCount} {t("film.episodes")} · {formatDate(film.updatedAt, locale)}
             </span>
             <span
               style={{

@@ -1,6 +1,6 @@
 /**
- * Ép mọi giá trị lỗi (Error, object provider trả về, string...) thành message string —
- * dùng ở ranh giới nhận lỗi (catch, parse response) để DB/UI luôn nhận string.
+ * Converts any error value (Error, provider object, string, etc.) into a message
+ * at error boundaries so the database and UI always receive a string.
  */
 export function toErrorMessage(value: unknown): string {
   if (typeof value === "string") return value;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { IconPencil, IconX } from "@tabler/icons-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface Props {
   title: string;
@@ -15,11 +16,13 @@ interface Props {
 export function DetailPanelHeader({
   title,
   visual,
-  closeLabel = "Close",
+  closeLabel,
   onClose,
   onTitleSave,
   titlePlaceholder,
 }: Props) {
+  const { t } = useTranslation();
+  const resolvedCloseLabel = closeLabel ?? t("common.close");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const [saving, setSaving] = useState(false);
@@ -60,7 +63,7 @@ export function DetailPanelHeader({
             onChange={(event) => setDraft(event.target.value)}
             onBlur={() => void commit()}
             onKeyDown={(event) => {
-              if (event.key === "Enter") { event.preventDefault(); void commit(); }
+              if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); }
               if (event.key === "Escape") { event.preventDefault(); setDraft(title); setEditing(false); }
             }}
           />
@@ -79,7 +82,12 @@ export function DetailPanelHeader({
         )}
       </div>
       {onClose && (
-        <button className="icon-btn" onClick={onClose} title={closeLabel} aria-label={closeLabel}>
+        <button
+          className="icon-btn"
+          onClick={onClose}
+          title={resolvedCloseLabel}
+          aria-label={resolvedCloseLabel}
+        >
           <IconX size={16} />
         </button>
       )}

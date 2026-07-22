@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
 import { RightPanel } from "@/components/canvas/RightPanel";
 import { EpisodeVideoActions } from "@/components/episodes/EpisodeVideoActions";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useResizePanel } from "@/hooks/useResizePanel";
+import { apiFetch, apiPost } from "@/lib/utils/api";
 import { sceneHasActiveVideo } from "@/lib/video/video-status";
+import { useAppStore } from "@/store/useAppStore";
 import type { Episode } from "@/types/episode";
 import type { Film } from "@/types/film";
 import type { Scene } from "@/types/scene";
@@ -19,63 +21,69 @@ interface Props {
 
 export default function EpisodePage({ params }: Props) {
   const { t } = useTranslation();
+  const { addToast } = useAppStore();
   const [film, setFilm] = useState<Film | null>(null);
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [objects, setObjects] = useState<StoryObject[]>([]);
   const [loading, setLoading] = useState(true);
   const rightPanel = useResizePanel(426, 126, 520, "right");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
-    const [filmRes, epRes, objRes] = await Promise.all([
-      fetch(`/api/films/${params.filmId}`),
-      fetch(`/api/episodes/${params.episodeId}`),
-      fetch(`/api/objects?filmId=${params.filmId}`),
-    ]);
-    const filmData = await filmRes.json();
-    const epData = await epRes.json();
-    const objData = await objRes.json();
-    setFilm(filmData);
-    setEpisode(epData);
-    setScenes(epData.scenes ?? []);
-    setObjects(Array.isArray(objData) ? objData : []);
-    setLoading(false);
-  }, [params.filmId, params.episodeId]);
+    try {
+      const [filmData, episodeData, objectData] = await Promise.all([
+        apiFetch<Film>(`/api/films/${params.filmId}`),
+        apiFetch<Episode & { scenes?: Scene[] }>(`/api/episodes/${params.episodeId}`),
+        apiFetch<StoryObject[]>(`/api/objects?filmId=${params.filmId}`),
+      ]);
+      setFilm(filmData);
+      setEpisode(episodeData);
+      setScenes(episodeData.scenes ?? []);
+      setObjects(Array.isArray(objectData) ? objectData : []);
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast, params.filmId, params.episodeId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Auto-poll every 3s while any scene has a GENERATING/QUEUED variant
-  useEffect(() => {
-    const hasGenerating = scenes.some(sceneHasActiveVideo);
+  const hasActiveVideo = scenes.some(sceneHasActiveVideo);
 
-    if (hasGenerating && !pollRef.current) {
-      pollRef.current = setInterval(async () => {
-        // Gọi sync-variants: hỏi thẳng ComfyUI từng job đang GENERATING
-        // và cập nhật DB nếu đã xong, rồi trả về scenes mới nhất
-        const res = await fetch(`/api/episodes/${params.episodeId}/sync-variants`, { method: "POST" });
-        const newScenes: Scene[] = await res.json();
-        setScenes(newScenes);
-        if (!newScenes.some(sceneHasActiveVideo)) {
-          clearInterval(pollRef.current!);
-          pollRef.current = null;
+  // Poll serially while work is active. A recursive timeout prevents a slow
+  // provider check from overlapping with the next request.
+  useEffect(() => {
+    if (!hasActiveVideo) return;
+
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const nextScenes = await apiPost<Scene[]>(
+          `/api/episodes/${params.episodeId}/sync-variants`,
+          {}
+        );
+        if (cancelled) return;
+        if (!Array.isArray(nextScenes)) throw new Error("Invalid scene sync response");
+        setScenes(nextScenes);
+        if (nextScenes.some(sceneHasActiveVideo)) timeout = setTimeout(poll, 3000);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("[episode-sync]", error);
+          timeout = setTimeout(poll, 3000);
         }
-      }, 3000);
-    }
+      }
+    };
 
-    if (!hasGenerating && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenes, params.episodeId]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+    timeout = setTimeout(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [hasActiveVideo, params.episodeId]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>

@@ -13,15 +13,15 @@ const MAX_REFERENCE_IMAGES = 4;
 
 /**
  * Resolve absolute, existing paths of each linked object's main (else first) ref image —
- * the single source of truth for "ảnh nhận dạng của object", dùng chung cho cả luồng
- * tạo ảnh scene lẫn ảnh tham chiếu gửi provider video.
+ * The single source of truth for object identity images, shared by scene image
+ * generation and video-provider reference preparation.
  */
 export function resolveObjectReferenceImagePaths(
   objectLinks: ObjectLinks,
   opts: {
-    /** Chỉ lấy các object này (mặc định: tất cả) */
+    /** Restrict references to these objects. Defaults to all linked objects. */
     objectIds?: ReadonlySet<string>;
-    /** Xếp CHARACTER lên trước — dùng khi số ảnh bị giới hạn và nhân vật cần ưu tiên */
+    /** Prioritize characters when the provider limits reference image count. */
     characterFirst?: boolean;
     limit?: number;
   } = {}
@@ -42,7 +42,7 @@ export function resolveObjectReferenceImagePaths(
       const abs = resolveStoragePath(img.path);
       if (fs.existsSync(abs) && !paths.includes(abs)) paths.push(abs);
     } catch {
-      // path không hợp lệ (traversal) → bỏ qua ảnh này
+      // Ignore invalid or traversal paths.
     }
   }
   return paths.slice(0, opts.limit ?? MAX_REFERENCE_IMAGES);

@@ -33,8 +33,8 @@ export function isAudioFile(filename: string): boolean {
 }
 
 export function validatePrompt(prompt: string): string | null {
-  if (!isNonEmpty(prompt)) return "Prompt không được để trống";
-  if (prompt.length < 5) return "Prompt quá ngắn (tối thiểu 5 ký tự)";
-  if (prompt.length > 2000) return "Prompt quá dài (tối đa 2000 ký tự)";
+  if (!isNonEmpty(prompt)) return "Prompt is required";
+  if (prompt.length < 5) return "Prompt is too short (minimum 5 characters)";
+  if (prompt.length > 2000) return "Prompt is too long (maximum 2000 characters)";
   return null;
 }

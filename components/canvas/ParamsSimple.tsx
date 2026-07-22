@@ -74,7 +74,7 @@ export function ParamsSimple({ values, onChange }: ParamsSimpleProps) {
       </div>
 
       <div style={{ marginBottom: 8 }}>
-        <label className="form-label">Aspect Ratio</label>
+        <label className="form-label">{t("params.aspectRatio")}</label>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {ASPECT_RATIO_OPTIONS.map((r) => {
             const active = values.aspectRatio === r;

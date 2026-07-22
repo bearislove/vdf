@@ -106,6 +106,7 @@
     "enrichStep1": "Bước 1/3 — Dịch & mở rộng cốt chuyện",
     "enrichStep2": "Bước 2/3 — Phân tích cảnh quay",
     "enrichStep3": "Bước 3/3 — Trích xuất nhân vật & vật thể",
+    "aiProcessing": "AI đang xử lý",
     "noVideo": "Tập chưa có video",
     "deleteConfirm": "Xóa tập này?",
     "fileTypeError": "Chỉ hỗ trợ file .md hoặc .txt",
@@ -149,6 +150,10 @@
     "arrangeScenes": "Sắp xếp tự động",
     "arrangingScenes": "Đang sắp xếp...",
     "scenesArranged": "Đã sắp xếp lại các cảnh",
+    "deleteSceneTitle": "Xóa cảnh?",
+    "deleteTransitionTitle": "Xóa liên kết?",
+    "deleteSceneMessage": "Xóa {scene} và tất cả video của cảnh này?",
+    "deleteTransitionMessage": "Xóa liên kết chuyển cảnh này?",
     "charactersAndObjects": "Nhân vật & Đối tượng",
     "initialReferenceImage": "Ảnh tham chiếu khởi đầu",
     "videoInputImage": "Ảnh đầu vào image-to-video",
@@ -221,7 +226,8 @@
     "description": "Mô tả cảnh",
     "negativePrompt": "Negative prompt",
     "negativePromptPlaceholder": "Ví dụ: blurry, identity drift, distorted hands, unwanted text, camera shake...",
-    "duration": "Thời lượng"
+    "duration": "Thời lượng",
+    "aspectRatio": "Tỷ lệ khung hình"
   },
   "generation": {
     "provider": "Provider"

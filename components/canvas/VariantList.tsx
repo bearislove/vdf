@@ -95,7 +95,7 @@ function VariantCard({
   const [errorExpanded, setErrorExpanded] = useState(false);
   const snapshot = variant.paramsSnapshot as Record<string, unknown>;
   const seed = snapshot?.seed ?? "?";
-  // Danh sách đầy đủ ảnh tham chiếu đã gửi cho provider; variant cũ chỉ lưu 1 ảnh first frame
+  // Full provider reference list; older variants may only store one first frame.
   const fallbackReference = variant.compositeImagePath ||
     (typeof snapshot?.referenceImagePath === "string" ? snapshot.referenceImagePath : null);
   const storedReferenceImagePaths = variant.referenceImagePaths?.length

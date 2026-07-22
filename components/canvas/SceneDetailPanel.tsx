@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { IconDeviceFloppy, IconLoader2, IconPlayerPlay, IconTextDecrease, IconTextIncrease } from "@tabler/icons-react";
 import { useAppStore } from "@/store/useAppStore";
 import { useTranslation } from "@/hooks/useTranslation";
-import { apiPut, apiPost } from "@/lib/utils/api";
+import { apiDelete, apiPut, apiPost } from "@/lib/utils/api";
+import { isVideoActive } from "@/lib/video/video-status";
 import { ParamsSimple, durationToFrames, type SimpleParams } from "./ParamsSimple";
 import { VariantList } from "./VariantList";
 import { InitialImageManager } from "./InitialImageManager";
@@ -105,9 +106,7 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
     || simpleParams.aspectRatio !== savedParams.aspectRatio;
   const hasValidDuration = /^\d+$/.test(duration) && Number(duration) > 0;
 
-  const hasActiveVideo = scene.videoVariants?.some((variant) =>
-    ["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"].includes(variant.status)
-  ) ?? false;
+  const hasActiveVideo = scene.videoVariants?.some((variant) => isVideoActive(variant.status)) ?? false;
   const isVideoGenerating = generating || hasActiveVideo;
 
   const handleGenerate = useCallback(async () => {
@@ -165,8 +164,12 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
   }, [prompt, negativePrompt, hasValidDuration, saving, hasChanges, simpleParams, scene.id, scene.videoParams, duration, addToast, t, onUpdate]);
 
   const handleSelectVariant = async (variantId: string) => {
-    await apiPut(`/api/scenes/${scene.id}`, { selectedVideoId: variantId });
-    onUpdate();
+    try {
+      await apiPut(`/api/scenes/${scene.id}`, { selectedVideoId: variantId });
+      onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const descriptionBusy = enhancingDescription || simplifyingDescription;
@@ -203,17 +206,17 @@ export function SceneDetailPanel({ scene, onUpdate }: Props) {
     rewriteDescription("simplify-description", setSimplifyingDescription, t("canvas.sceneDescriptionSimplified"));
 
   const handleDeleteVariant = async (variantId: string) => {
-    await fetch(`/api/videos/${variantId}`, { method: "DELETE" });
-    onUpdate();
+    try {
+      await apiDelete(`/api/videos/${variantId}`);
+      onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    }
   };
 
   const handleRetryVariant = async (variantId: string) => {
     try {
-      const response = await fetch(`/api/videos/${variantId}/retry`, { method: "POST" });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(typeof payload.error === "string" ? payload.error : `Retry failed (${response.status})`);
-      }
+      await apiPost(`/api/videos/${variantId}/retry`, {});
       addToast("info", t("video.queuedMessage"));
       onUpdate();
     } catch (error) {

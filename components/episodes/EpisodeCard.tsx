@@ -35,10 +35,10 @@ const STATUS_I18N_KEY: Record<EpisodeStatus, string> = {
   DONE:       "episode.status.done",
 };
 
-const ENRICH_STEPS = [
-  "1. Dịch & mở rộng cốt chuyện",
-  "2. Phân tích cảnh quay",
-  "3. Trích xuất nhân vật & vật thể",
+const ENRICH_STEP_KEYS = [
+  "episode.enrichStep1",
+  "episode.enrichStep2",
+  "episode.enrichStep3",
 ];
 
 export function EpisodeCard({ episode, filmId, onDelete }: EpisodeCardProps) {
@@ -133,7 +133,7 @@ export function EpisodeCard({ episode, filmId, onDelete }: EpisodeCardProps) {
               {/* Spinner + label */}
               <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--blue)" }}>
                 <span className="ep-spin" style={{ fontSize: 12 }}>⟳</span>
-                <span>🤖 AI đang xử lý</span>
+                <span>🤖 {t("episode.aiProcessing")}</span>
                 <span className="ep-dots">
                   <span style={{ animationDelay: "0s" }}>.</span>
                   <span style={{ animationDelay: "0.2s" }}>.</span>
@@ -143,14 +143,14 @@ export function EpisodeCard({ episode, filmId, onDelete }: EpisodeCardProps) {
 
               {/* Cycling steps */}
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {ENRICH_STEPS.map((step, i) => (
+                {ENRICH_STEP_KEYS.map((stepKey, i) => (
                   <div
                     key={i}
                     className={`ep-step ep-step-${i}`}
                     style={{ fontSize: 9, display: "flex", alignItems: "center", gap: 4 }}
                   >
                     <span style={{ fontSize: 8 }}>○</span>
-                    {step}
+                    {t(stepKey)}
                   </div>
                 ))}
               </div>

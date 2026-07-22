@@ -12,7 +12,7 @@ import {
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useAppStore } from "@/store/useAppStore";
 import { useTranslation } from "@/hooks/useTranslation";
-import { apiPut } from "@/lib/utils/api";
+import { apiFetch, apiPut } from "@/lib/utils/api";
 import { consumeSSE } from "@/lib/utils/sse";
 import { MediaPreviewModal } from "@/components/ui/MediaPreviewModal";
 import { PanelSection } from "@/components/ui/PanelSection";
@@ -153,7 +153,7 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
           const percent = total > 0 ? Math.round((step / total) * 100) : 0;
           updateObjectImageGeneration(objectId, `${step}/${total} (${percent}%)`);
         } else if (event.type === "status") {
-          updateObjectImageGeneration(objectId, event.message ?? "...");
+          updateObjectImageGeneration(objectId, t("common.processing"));
         } else if (event.type === "done") {
           addToast("success", t("object.imageGenerated"));
           await onUpdate();
@@ -181,12 +181,16 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
     return updateImages(images.map((image) => ({ ...image, isMain: image.path === path })));
   }
 
-  function handleDeleteImage(path: string) {
-    const nextImages = images.filter((image) => image.path !== path);
-    if (nextImages.length > 0 && !nextImages.some((image) => image.isMain)) {
-      nextImages[0] = { ...nextImages[0], isMain: true };
+  async function handleDeleteImage(path: string) {
+    try {
+      await apiFetch(`/api/objects/${object.id}/images`, {
+        method: "DELETE",
+        body: JSON.stringify({ path }),
+      });
+      await onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
     }
-    return updateImages(nextImages);
   }
 
   return (

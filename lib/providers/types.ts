@@ -80,7 +80,7 @@ export interface VideoSubmittedMeta {
   comfyPromptId?: string;
   comfyClientId?: string;
   workflowSnapshot?: Record<string, unknown>;
-  /** Storage-relative paths của toàn bộ ảnh tham chiếu thực tế gửi cho provider (first frame + object refs) */
+  /** Storage-relative paths for all references actually sent to the provider. */
   referenceImagePaths?: string[];
 }
 

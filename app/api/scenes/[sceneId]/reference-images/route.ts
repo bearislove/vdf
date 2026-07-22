@@ -55,7 +55,7 @@ export async function GET(
   const scene = await getScene(params.sceneId);
   if (!scene) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Đồng bộ ảnh nhận dạng của object vào thư mục scene ngay lúc đọc — client không cần gọi clone riêng
+  // Sync linked object references while reading so the client needs no separate clone request.
   await cloneLinkedObjectReferences(scene.id);
   const images = listSceneCompositeImages(scene.episode.filmId, scene.episodeId, scene.id)
     .map(({ absPath, mtimeMs }) => ({

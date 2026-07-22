@@ -29,7 +29,7 @@ export class ComfyUIImageProvider implements ImageProvider {
 
   async generateImage(input: ImageGenInput, hooks: ImageGenHooks): Promise<void> {
     if (input.referenceImagePaths?.length) {
-      hooks.onStatus("ComfyUI chưa hỗ trợ ảnh tham chiếu — ảnh upload sẽ bị bỏ qua, dùng Agnes để giữ chủ thể");
+      hooks.onStatus("ComfyUI does not support reference images; uploads will be ignored. Use Agnes to preserve subjects.");
     }
     const workflow = buildTestImgWorkflow({
       prompt: input.prompt,
@@ -49,7 +49,7 @@ export class ComfyUIImageProvider implements ImageProvider {
       return;
     }
 
-    hooks.onStatus("Đã gửi tới ComfyUI...");
+    hooks.onStatus("Submitted to ComfyUI...");
     await this.waitAndDeliver(promptId, clientId, hooks);
   }
 
@@ -73,7 +73,7 @@ export class ComfyUIImageProvider implements ImageProvider {
       }
       const image = findOutputImage(history.outputs);
       if (!image) {
-        hooks.onError("Không tìm thấy ảnh output");
+        hooks.onError("No output image was found");
         return true;
       }
       const buffer = await downloadOutput(image.filename, image.subfolder, image.type);
@@ -111,7 +111,7 @@ export class ComfyUIImageProvider implements ImageProvider {
         }
       });
 
-      // Polling fallback: dùng khi WS không gửi done sau khi progress xong
+      // Poll when the WebSocket does not emit done after progress completes.
       const pollInterval = setInterval(async () => {
         if (!progressDone || settled) return;
         try {
@@ -125,7 +125,7 @@ export class ComfyUIImageProvider implements ImageProvider {
       }, POLL_INTERVAL_MS);
 
       const timeoutId = setTimeout(() => {
-        settle(() => hooks.onError("Timeout sau 5 phút"));
+        settle(() => hooks.onError("Timed out after 5 minutes"));
       }, TIMEOUT_MS);
     });
   }

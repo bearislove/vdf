@@ -37,7 +37,7 @@ export function sceneCompositeImagesDir(filmId: string, episodeId: string, scene
 
 export const SCENE_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
-/** Toàn bộ file ảnh trong thư mục Initial reference image của scene, mới nhất trước (đường dẫn tuyệt đối) */
+/** All scene reference images as absolute paths, newest first. */
 export function listSceneCompositeImages(
   filmId: string,
   episodeId: string,

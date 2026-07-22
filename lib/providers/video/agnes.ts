@@ -10,6 +10,7 @@ import type { AgnesVideoImageRef } from "@/lib/providers/agnes";
 import { buildPrompt } from "@/lib/comfyui/prompt";
 import { LTX_VIDEO_DEFAULTS, ASPECT_RATIOS } from "@/lib/comfyui/defaults";
 import { storageRelative } from "@/lib/storage";
+import { getAgnesCredentialCount } from "@/lib/providers/agnes-credentials";
 import { toErrorMessage } from "@/lib/utils/errors";
 import type {
   RecoverableVariant,
@@ -58,7 +59,9 @@ export class AgnesVideoProvider implements VideoProvider {
   validate(): string | null {
     // Agnes supports both image-to-video and text-to-video. The absence of an
     // Initial reference image intentionally selects text-to-video mode.
-    return null;
+    return getAgnesCredentialCount() > 0
+      ? null
+      : "AGNES_AI_API_KEY or AGNES_AI_API_KEYS is not configured for video generation";
   }
 
   async runVideoGeneration(ctx: VideoGenContext, hooks: VideoGenHooks): Promise<void> {
@@ -125,7 +128,7 @@ export class AgnesVideoProvider implements VideoProvider {
       });
 
       if (finalStatus.status !== "completed" || !finalStatus.url) {
-        await hooks.onError(finalStatus.error ?? "Agnes AI không trả về video");
+        await hooks.onError(finalStatus.error ?? "Agnes AI returned no video");
         return;
       }
 

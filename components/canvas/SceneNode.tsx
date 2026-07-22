@@ -5,6 +5,7 @@ import { Handle, Position } from "reactflow";
 import type { NodeProps } from "reactflow";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useTranslation } from "@/hooks/useTranslation";
+import { isVideoActive } from "@/lib/video/video-status";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
@@ -59,7 +60,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
   const latestVariant = scene.videoVariants?.[scene.videoVariants.length - 1];
   const selectedVariant = scene.selectedVideo;
   const activeVariant = [...(scene.videoVariants ?? [])].reverse().find((variant) =>
-    ["QUEUED", "GENERATING_IMAGE", "GENERATING_VIDEO"].includes(variant.status)
+    isVideoActive(variant.status)
   );
   const displayVariant = activeVariant ?? selectedVariant ?? latestVariant;
 
@@ -67,18 +68,15 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
   const coverImg = displayVariant?.lastFramePath || displayVariant?.thumbnailPath ||
     (displayVariant?.videoPath?.endsWith(".webp") ? displayVariant.videoPath : null);
   const initialImage = scene.compositeImagePath;
-  const isGenerating =
-    displayVariant?.status === "QUEUED" ||
-    displayVariant?.status === "GENERATING_IMAGE" ||
-    displayVariant?.status === "GENERATING_VIDEO";
+  const isGenerating = displayVariant ? isVideoActive(displayVariant.status) : false;
   const isFailed = displayVariant?.status === "FAILED";
 
   const characters = scene.objectLinks?.slice(0, 5) ?? [];
 
-  const progress =
-    isGenerating && displayVariant.progressTotal > 0
-      ? Math.round((displayVariant.progressStep / displayVariant.progressTotal) * 100)
-      : 0;
+  const progressTotal = displayVariant?.progressTotal ?? 0;
+  const progress = isGenerating && progressTotal > 0
+    ? Math.round(((displayVariant?.progressStep ?? 0) / progressTotal) * 100)
+    : 0;
 
   return (
     <div
@@ -163,7 +161,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
             >
               ⟳
             </span>
-            {/* Chỉ hiện % khi có dữ liệu thật từ ComfyUI */}
+            {/* Show a percentage only when the provider reports real progress. */}
             {(displayVariant?.progressTotal ?? 0) > 0 && (
               <div
                 style={{

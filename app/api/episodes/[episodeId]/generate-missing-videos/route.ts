@@ -19,7 +19,7 @@ export async function POST(
   const agnesCredentialCount = getAgnesCredentialCount();
   if (providerName === "agnes" && agnesCredentialCount === 0) {
     return NextResponse.json(
-      { error: "Chưa cấu hình AGNES_AI_API_KEY hoặc AGNES_AI_API_KEYS để tạo video" },
+      { error: "AGNES_AI_API_KEY or AGNES_AI_API_KEYS is not configured for video generation" },
       { status: 400 }
     );
   }

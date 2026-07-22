@@ -14,7 +14,7 @@ import type {
 const COMFYUI_URL = process.env.COMFYUI_URL ?? "http://localhost:8188";
 const FAST_POLL_INTERVAL_MS = 5000;
 const RECOVERY_POLL_INTERVAL_MS = 10_000;
-const RECOVERY_MAX_MS = 2 * 60 * 60 * 1000; // tối đa 2 giờ
+const RECOVERY_MAX_MS = 2 * 60 * 60 * 1000; // Maximum two hours.
 const WS_TIMEOUT_MS = parseInt(process.env.COMFYUI_TIMEOUT ?? "300") * 1000;
 
 type OutputImage = { filename: string; subfolder: string; type: string };
@@ -92,13 +92,13 @@ export class ComfyUIVideoProvider implements VideoProvider {
     if (!history) {
       return { status: "not_found", message: "Job not found in ComfyUI history (may have been cleared)" };
     }
-    if (!history.status?.completed) {
-      return { status: "still_running", message: "Job is still running in ComfyUI" };
-    }
     if (history.status?.status_str === "error") {
       const message = extractErrorDetail(history);
       await hooks.onError(message);
       return { status: "provider_error", message };
+    }
+    if (!history.status?.completed) {
+      return { status: "still_running", message: "Job is still running in ComfyUI" };
     }
 
     const image = findOutputImages(history.outputs)[0];
@@ -137,15 +137,18 @@ export class ComfyUIVideoProvider implements VideoProvider {
       }
     };
 
-    // Recovery polling: dùng khi WS drop hoặc timeout — không mark FAILED ngay
+    // Recovery polling keeps the job alive when the WebSocket disconnects or times out.
     const startRecoveryPolling = async (reason: string) => {
       const start = Date.now();
       while (Date.now() - start < RECOVERY_MAX_MS) {
         await new Promise((r) => setTimeout(r, RECOVERY_POLL_INTERVAL_MS));
         try {
           const history = await getHistory(promptId);
-          if (!history) continue; // job vẫn đang chạy hoặc queued
-          if (history.status?.status_str === "error") break;
+          if (!history) continue; // The job is still queued or running.
+          if (history.status?.status_str === "error") {
+            await hooks.onError(extractErrorDetail(history));
+            return;
+          }
           if (history.status?.completed) {
             await handleDone(undefined);
             return;
@@ -181,12 +184,12 @@ export class ComfyUIVideoProvider implements VideoProvider {
           processed = true;
           settle(async () => { await handleDone(event.outputs); });
         } else if (event.type === "error") {
-          // WS bị ngắt — KHÔNG mark FAILED ngay, chuyển sang polling
+          // Switch to polling instead of failing immediately after a WebSocket disconnect.
           settle(async () => { await startRecoveryPolling("WebSocket disconnected"); });
         }
       });
 
-      // Fast polling fallback — dùng khi progress done nhưng WS chưa báo done
+      // Fast polling fallback for completed progress without a WebSocket done event.
       const pollInterval = setInterval(async () => {
         if (!progressDone || settled) return;
         try {
@@ -200,7 +203,7 @@ export class ComfyUIVideoProvider implements VideoProvider {
         } catch { /* retry */ }
       }, FAST_POLL_INTERVAL_MS);
 
-      // WS timeout — chuyển sang recovery polling, không mark FAILED
+      // A WebSocket timeout switches to recovery polling rather than failing the job.
       const timeoutId = setTimeout(() => {
         settle(async () => { await startRecoveryPolling("WebSocket timeout"); });
       }, WS_TIMEOUT_MS);

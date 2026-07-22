@@ -8,7 +8,7 @@ export interface AgnesCredential {
 export type AgnesCredentialLane = "text" | "image" | "video";
 
 const MISSING_CREDENTIALS_ERROR =
-  "AGNES_AI_API_KEY hoặc AGNES_AI_API_KEYS chưa được cấu hình trong .env";
+  "AGNES_AI_API_KEY or AGNES_AI_API_KEYS is not configured in .env";
 
 function parseCredentialPool(rawValue: string | undefined): string[] {
   const value = rawValue?.trim().replace(/^['"]|['"]$/g, "");
@@ -22,11 +22,11 @@ function parseCredentialPool(rawValue: string | undefined): string[] {
     parsed = JSON.parse(value);
   } catch {
     throw new Error(
-      "AGNES_AI_API_KEYS phải là JSON array hợp lệ hoặc danh sách phân tách bằng dấu phẩy/xuống dòng"
+      "AGNES_AI_API_KEYS must be a valid JSON array or a comma/newline-separated list"
     );
   }
   if (!Array.isArray(parsed) || !parsed.every((key) => typeof key === "string")) {
-    throw new Error("AGNES_AI_API_KEYS phải là một JSON array chỉ chứa chuỗi");
+    throw new Error("AGNES_AI_API_KEYS must be a JSON array containing only strings");
   }
   return parsed;
 }
@@ -70,7 +70,7 @@ export function getAgnesCredential(credentialId?: string): AgnesCredential {
   const credential = pool.find(({ id }) => id === credentialId);
   if (!credential) {
     throw new Error(
-      `Không tìm thấy Agnes credential ${credentialId}; token có thể đã bị xóa khỏi AGNES_AI_API_KEYS`
+      `Agnes credential ${credentialId} was not found; the token may have been removed from AGNES_AI_API_KEYS`
     );
   }
   return credential;

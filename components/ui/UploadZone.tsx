@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { IconLoader2, IconUpload } from "@tabler/icons-react";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface UploadZoneProps {
   accept?: string;
@@ -20,14 +21,15 @@ export function UploadZone({
   accept = "image/*",
   multiple = true,
   onFiles,
-  label = "Kéo file vào đây",
+  label,
   hint = "JPG PNG WEBP",
   loading = false,
   disabled = false,
-  loadingLabel = "Uploading...",
+  loadingLabel,
   className,
   style,
 }: UploadZoneProps) {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inactive = loading || disabled;
@@ -64,7 +66,7 @@ export function UploadZone({
         {loading
           ? <IconLoader2 className="loading-spinner" size={14} style={{ marginRight: 5, verticalAlign: -2 }} />
           : <IconUpload size={14} style={{ marginRight: 5, verticalAlign: -2 }} />}
-        {loading ? loadingLabel : label}
+        {loading ? (loadingLabel ?? t("common.uploading")) : (label ?? t("common.dragFiles"))}
         {hint && <span style={{ color: "var(--text3)", marginLeft: 4 }}>· {hint}</span>}
       </button>
       <input

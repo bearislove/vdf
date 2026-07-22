@@ -1,17 +1,25 @@
-export function formatDate(date: Date | string): string {
+import type { Locale } from "@/i18n/config";
+
+const LOCALE_TAGS: Record<Locale, string> = {
+  vi: "vi-VN",
+  en: "en-US",
+  zh: "zh-CN",
+};
+
+export function formatDate(date: Date | string, locale: Locale): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
+  const absDiffMs = Math.abs(diffMs);
+  const formatter = new Intl.RelativeTimeFormat(LOCALE_TAGS[locale], { numeric: "auto" });
 
-  if (diffSec < 60) return "vừa xong";
-  if (diffMin < 60) return `${diffMin} phút trước`;
-  if (diffHour < 24) return `${diffHour} giờ trước`;
-  if (diffDay < 7) return `${diffDay} ngày trước`;
-  return d.toLocaleDateString("vi-VN");
+  if (absDiffMs < 60_000) return formatter.format(0, "second");
+  if (absDiffMs < 60 * 60_000) return formatter.format(-Math.round(diffMs / 60_000), "minute");
+  if (absDiffMs < 24 * 60 * 60_000) return formatter.format(-Math.round(diffMs / (60 * 60_000)), "hour");
+  if (absDiffMs < 7 * 24 * 60 * 60_000) {
+    return formatter.format(-Math.round(diffMs / (24 * 60 * 60_000)), "day");
+  }
+  return new Intl.DateTimeFormat(LOCALE_TAGS[locale]).format(d);
 }
 
 export function formatDuration(seconds: number): string {

@@ -35,11 +35,9 @@ export interface SceneConnectionNode {
 }
 
 /**
- * Trả về thứ tự các scene id để dàn layout — đi theo mũi tên transitionsTo
- * (đồ thị người dùng tự nối) thay vì theo `order` (số thứ tự tạo scene).
- * Scene nào không có ai trỏ tới được coi là điểm bắt đầu một chuỗi; giữa các
- * điểm bắt đầu (hoặc các scene còn sót lại do nằm trong vòng lặp), ưu tiên
- * theo `order` để kết quả ổn định và có thể lặp lại.
+ * Orders scene IDs for layout by following transitionsTo rather than creation
+ * order. Nodes without incoming edges start chains; roots and cycle-only nodes
+ * fall back to `order` for deterministic output.
  */
 export function orderScenesByConnections(scenes: SceneConnectionNode[]): string[] {
   const byId = new Map(scenes.map((scene) => [scene.id, scene]));
@@ -71,4 +69,3 @@ export function orderScenesByConnections(scenes: SceneConnectionNode[]): string[
 
   return sequence;
 }
-

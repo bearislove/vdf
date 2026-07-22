@@ -7,7 +7,6 @@ import ReactFlow, {
   BackgroundVariant,
   ConnectionMode,
   Panel,
-  addEdge,
   useNodesState,
   useEdgesState,
   type Node,
@@ -21,7 +20,7 @@ import "reactflow/dist/style.css";
 import { SceneNode } from "./SceneNode";
 import { DeletableEdge } from "./DeletableEdge";
 import { useCanvasStore } from "@/store/useCanvasStore";
-import { apiPut, apiPost } from "@/lib/utils/api";
+import { apiDelete, apiPut, apiPost } from "@/lib/utils/api";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
@@ -127,9 +126,10 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   const { selectedSceneId, selectScene } = useCanvasStore();
   const { addToast } = useAppStore();
   const { t } = useTranslation();
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const [isArranging, setIsArranging] = useState(false);
+  const [isAddingScene, setIsAddingScene] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // ── Mutable ref holding latest callbacks — keeps edge/node data stable ────
   const cbRef = useRef({ scenes, onScenesChange });
@@ -137,15 +137,8 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
 
   // ── Stable callbacks (never change reference) ─────────────────────────────
   const execDeleteScene = useCallback(async (sceneId: string) => {
-    const { scenes: sc, onScenesChange: refresh } = cbRef.current;
-    const refs = sc.filter((s) => (s.transitionsTo ?? []).includes(sceneId));
-    await Promise.all(refs.map((s) =>
-      apiPut(`/api/scenes/${s.id}`, {
-        transitionsTo: (s.transitionsTo ?? []).filter((id) => id !== sceneId),
-      })
-    ));
-    await fetch(`/api/scenes/${sceneId}`, { method: "DELETE" });
-    refresh();
+    await apiDelete(`/api/scenes/${sceneId}`);
+    cbRef.current.onScenesChange();
   }, []);
 
   const execDeleteEdge = useCallback(async (sourceId: string, targetId: string) => {
@@ -159,29 +152,44 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   }, []);
 
   const handleAddScene = useCallback(async () => {
-    const nextOrder = cbRef.current.scenes.reduce((max, scene) => Math.max(max, scene.order), -1) + 1;
-    const canvasPosition = getSceneCanvasPosition(nextOrder);
-    await apiPost("/api/scenes", {
-      episodeId,
-      title: "",
-      order: nextOrder,
-      canvasX: canvasPosition.x,
-      canvasY: canvasPosition.y,
-      connectPrevious: true,
-    });
-    cbRef.current.onScenesChange();
-  }, [episodeId]);
+    if (isAddingScene) return;
+    setIsAddingScene(true);
+    try {
+      const nextOrder = cbRef.current.scenes.reduce((max, scene) => Math.max(max, scene.order), -1) + 1;
+      const canvasPosition = getSceneCanvasPosition(nextOrder);
+      await apiPost("/api/scenes", {
+        episodeId,
+        title: "",
+        order: nextOrder,
+        canvasX: canvasPosition.x,
+        canvasY: canvasPosition.y,
+        connectPrevious: true,
+      });
+      cbRef.current.onScenesChange();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsAddingScene(false);
+    }
+  }, [addToast, episodeId, isAddingScene]);
 
   // ── Confirmation dialog ───────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   const confirmDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    if (deleteTarget.kind === "scene") await execDeleteScene(deleteTarget.id);
-    else await execDeleteEdge(deleteTarget.sourceId, deleteTarget.targetId);
-    selectionRef.current = { nodeIds: [], edgeIds: [] };
-    setDeleteTarget(null);
-  }, [deleteTarget, execDeleteScene, execDeleteEdge]);
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      if (deleteTarget.kind === "scene") await execDeleteScene(deleteTarget.id);
+      else await execDeleteEdge(deleteTarget.sourceId, deleteTarget.targetId);
+      selectionRef.current = { nodeIds: [], edgeIds: [] };
+      setDeleteTarget(null);
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [addToast, deleteTarget, execDeleteScene, execDeleteEdge, isDeleting]);
 
   // ── Selection tracking for Delete key ─────────────────────────────────────
   const selectionRef = useRef<{ nodeIds: string[]; edgeIds: string[] }>({ nodeIds: [], edgeIds: [] });
@@ -209,7 +217,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
           setDeleteTarget({
             kind: "scene",
             id: sceneId,
-            label: scene.title || `Cảnh ${scene.order + 1}`,
+            label: scene.title || t("canvas.sceneNumber", { n: String(scene.order + 1) }),
           });
         }
       } else if (edgeIds.length > 0) {
@@ -225,16 +233,20 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [deleteTarget]);
+  }, [deleteTarget, t]);
 
   // ── Nodes / Edges ─────────────────────────────────────────────────────────
   const initialNodes = useMemo(
     () => buildNodes(scenes, selectedSceneId, (id) => {
       const scene = scenes.find((s) => s.id === id);
-      setDeleteTarget({ kind: "scene", id, label: scene?.title || `Cảnh ${scene?.order ?? 0}` });
+      setDeleteTarget({
+        kind: "scene",
+        id,
+        label: scene?.title || t("canvas.sceneNumber", { n: String((scene?.order ?? 0) + 1) }),
+      });
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scenes, selectedSceneId],
+    [scenes, selectedSceneId, t],
   );
   const initialEdges = useMemo(
     () => buildEdges(scenes, (sourceId, targetId) =>
@@ -282,10 +294,14 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   useEffect(() => {
     setNodes(buildNodes(scenes, selectedSceneId, (id) => {
       const scene = cbRef.current.scenes.find((s) => s.id === id);
-      setDeleteTarget({ kind: "scene", id, label: scene?.title || `Cảnh ${scene?.order ?? 0}` });
+      setDeleteTarget({
+        kind: "scene",
+        id,
+        label: scene?.title || t("canvas.sceneNumber", { n: String((scene?.order ?? 0) + 1) }),
+      });
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenes, setNodes]);
+  }, [scenes, setNodes, t]);
 
   // Only toggle selected flag — never touch positions
   useEffect(() => {
@@ -303,33 +319,37 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
 
   const onConnect = useCallback(
     async (connection: Connection) => {
-      setEdges((eds) => addEdge({ ...connection, style: edgeStyle }, eds));
-      if (connection.source && connection.target) {
-        const sourceScene = scenes.find((s) => s.id === connection.source);
-        if (sourceScene) {
-          const newTransitions = [...(sourceScene.transitionsTo ?? []), connection.target];
-          await apiPut(`/api/scenes/${connection.source}`, { transitionsTo: newTransitions });
-          onScenesChange();
-        }
+      const { source, target } = connection;
+      if (!source || !target || source === target) return;
+
+      const sourceScene = cbRef.current.scenes.find((scene) => scene.id === source);
+      if (!sourceScene || (sourceScene.transitionsTo ?? []).includes(target)) return;
+
+      try {
+        await apiPut(`/api/scenes/${source}`, {
+          transitionsTo: [...(sourceScene.transitionsTo ?? []), target],
+        });
+        cbRef.current.onScenesChange();
+      } catch (error) {
+        addToast("error", error instanceof Error ? error.message : String(error));
       }
     },
-    [scenes, setEdges, onScenesChange]
+    [addToast]
   );
 
   const onNodeDragStop = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(async () => {
-        if (node.type === "sceneNode") {
-          // Save scene position
-          await apiPut(`/api/scenes/${node.id}`, {
-            canvasX: node.position.x,
-            canvasY: node.position.y,
-          });
-        }
-      }, 500);
+    async (_: React.MouseEvent, node: Node) => {
+      if (node.type !== "sceneNode") return;
+      try {
+        await apiPut(`/api/scenes/${node.id}`, {
+          canvasX: node.position.x,
+          canvasY: node.position.y,
+        });
+      } catch (error) {
+        addToast("error", error instanceof Error ? error.message : String(error));
+      }
     },
-    []
+    [addToast]
   );
 
   const onNodeClick = useCallback(
@@ -381,21 +401,27 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text1)" }}>
-              {deleteTarget.kind === "scene" ? "Xóa cảnh?" : "Xóa liên kết?"}
+              {deleteTarget.kind === "scene"
+                ? t("canvas.deleteSceneTitle")
+                : t("canvas.deleteTransitionTitle")}
             </div>
             <div style={{ fontSize: 12, color: "var(--text2)" }}>
               {deleteTarget.kind === "scene"
-                ? <>Xóa <strong>{deleteTarget.label}</strong> và tất cả video của cảnh này?</>
-                : "Xóa liên kết chuyển cảnh này?"}
+                ? t("canvas.deleteSceneMessage", { scene: deleteTarget.label })
+                : t("canvas.deleteTransitionMessage")}
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button className="btn btn-sm" onClick={() => setDeleteTarget(null)}>Hủy</button>
+              <button className="btn btn-sm" onClick={() => setDeleteTarget(null)}>
+                {t("common.cancel")}
+              </button>
               <button
                 className="btn btn-sm"
                 onClick={confirmDelete}
+                disabled={isDeleting}
+                aria-busy={isDeleting}
                 style={{ background: "var(--red-dim)", borderColor: "var(--red)", color: "var(--red)" }}
               >
-                Xóa
+                {t("common.delete")}
               </button>
             </div>
           </div>
@@ -453,7 +479,12 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
               </span>
               {isArranging ? t("canvas.arrangingScenes") : t("canvas.arrangeScenes")}
             </button>
-            <button onClick={handleAddScene} className="canvas-action-button">
+            <button
+              onClick={handleAddScene}
+              disabled={isAddingScene}
+              aria-busy={isAddingScene}
+              className="canvas-action-button"
+            >
               <span aria-hidden="true" style={{ fontSize: 14 }}>+</span>
               {t("canvas.addScene")}
             </button>
