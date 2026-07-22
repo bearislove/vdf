@@ -26,11 +26,6 @@ export function EmptyPanel() {
         }}
       >
         {t("canvas.noSelection")}
-        <br />
-        {t("canvas.dragHint")}
-      </p>
-      <p style={{ fontSize: 10, color: "var(--text3)", textAlign: "center" }}>
-        Kéo đối tượng từ panel trái vào scene
       </p>
     </div>
   );

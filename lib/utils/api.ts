@@ -2,9 +2,10 @@ export async function apiFetch<T>(
   url: string,
   options?: RequestInit
 ): Promise<T> {
+  const { headers, ...requestOptions } = options ?? {};
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
+    ...requestOptions,
+    headers: { "Content-Type": "application/json", ...headers },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

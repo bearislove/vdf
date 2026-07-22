@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  useStore,
   type EdgeProps,
+  type ReactFlowState,
 } from "reactflow";
 import { IconX } from "@tabler/icons-react";
+import { getEdgeParams, isMeasuredNode } from "@/lib/canvas/floating-edge";
 
 export interface DeletableEdgeData {
   sourceId: string;
@@ -17,26 +20,31 @@ export interface DeletableEdgeData {
 
 export function DeletableEdge({
   id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
+  source,
+  target,
   style,
   markerEnd,
   data,
   selected,
 }: EdgeProps<DeletableEdgeData>) {
   const [hovered, setHovered] = useState(false);
+  const sourceNode = useStore(
+    useCallback((store: ReactFlowState) => store.nodeInternals.get(source), [source])
+  );
+  const targetNode = useStore(
+    useCallback((store: ReactFlowState) => store.nodeInternals.get(target), [target])
+  );
 
+  if (!isMeasuredNode(sourceNode) || !isMeasuredNode(targetNode)) return null;
+
+  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(sourceNode, targetNode);
   const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+    sourceX: sx,
+    sourceY: sy,
+    sourcePosition: sourcePos,
+    targetX: tx,
+    targetY: ty,
+    targetPosition: targetPos,
   });
 
   return (

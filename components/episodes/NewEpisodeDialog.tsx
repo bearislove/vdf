@@ -6,11 +6,13 @@ import {
   IconCheck,
   IconFileText,
   IconMapPin,
+  IconPencil,
   IconRefresh,
   IconSparkles,
   IconUser,
 } from "@tabler/icons-react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { apiPost } from "@/lib/utils/api";
 import { useAppStore } from "@/store/useAppStore";
 import type { EnrichmentResult } from "@/lib/ai/enrichment";
 import type { TextProviderName } from "@/lib/providers/types";
@@ -25,14 +27,8 @@ interface Props {
 
 interface EpisodeForm {
   title: string;
-  useAI: boolean;
   targetDurationSeconds: string;
   sceneCountHint: string;
-}
-
-async function readError(response: Response) {
-  const body = await response.json().catch(() => ({}));
-  return typeof body.error === "string" ? body.error : `Request failed (${response.status})`;
 }
 
 export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
@@ -42,7 +38,6 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [form, setForm] = useState<EpisodeForm>({
     title: "",
-    useAI: true,
     targetDurationSeconds: "",
     sceneCountHint: "",
   });
@@ -81,18 +76,13 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
     if (!storyText.trim()) return;
     setAnalyzing(true);
     try {
-      const response = await fetch("/api/episodes/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filmId,
-          storyRaw: regenerate && analysis ? analysis.storyEnriched : storyText.trim(),
-          revisionRequest: regenerate ? revisionRequest.trim() : undefined,
-          provider: textProvider,
-        }),
+      const result = await apiPost<EnrichmentResult>("/api/episodes/preview", {
+        filmId,
+        storyRaw: regenerate && analysis ? analysis.storyEnriched : storyText.trim(),
+        revisionRequest: regenerate ? revisionRequest.trim() : undefined,
+        provider: textProvider,
       });
-      if (!response.ok) throw new Error(await readError(response));
-      setAnalysis(await response.json());
+      setAnalysis(result);
       if (regenerate) setRevisionRequest("");
     } catch (error) {
       addToast("error", String(error));
@@ -101,27 +91,22 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
     }
   }
 
-  async function submitEpisode() {
+  async function submitEpisode(withAnalysis: boolean) {
     if (!form.title.trim() || !storyText.trim()) return;
     setSubmitting(true);
     try {
-      const response = await fetch("/api/episodes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filmId,
-          title: form.title.trim(),
-          storyRaw: storyText.trim(),
-          targetDurationSeconds: form.targetDurationSeconds
-            ? Number(form.targetDurationSeconds)
-            : undefined,
-          sceneCountHint: !form.useAI && form.sceneCountHint
-            ? Number.parseInt(form.sceneCountHint, 10)
-            : undefined,
-          analysis: form.useAI ? analysis : undefined,
-        }),
+      await apiPost("/api/episodes", {
+        filmId,
+        title: form.title.trim(),
+        storyRaw: storyText.trim(),
+        targetDurationSeconds: form.targetDurationSeconds
+          ? Number(form.targetDurationSeconds)
+          : undefined,
+        sceneCountHint: !withAnalysis && form.sceneCountHint
+          ? Number.parseInt(form.sceneCountHint, 10)
+          : undefined,
+        analysis: withAnalysis ? analysis : undefined,
       });
-      if (!response.ok) throw new Error(await readError(response));
       await onCreated();
       addToast("success", t("episode.createdSuccess"));
       onClose();
@@ -175,20 +160,30 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
           <button className="btn" onClick={analysis ? () => setAnalysis(null) : onClose} disabled={busy}>
             {analysis ? t("common.back") : t("common.cancel")}
           </button>
-          {!analysis && form.useAI ? (
-            <button
-              className="btn-p"
-              onClick={() => analyzeStory(false)}
-              disabled={analyzing || !form.title.trim() || !storyText.trim()}
-            >
-              <IconSparkles className={analyzing ? "loading-spinner" : ""} size={15} />
-              {analyzing ? t("episode.analyzingPreview") : t("episode.analyzePreview")}
-            </button>
+          {!analysis ? (
+            <>
+              <button
+                className="btn"
+                onClick={() => submitEpisode(false)}
+                disabled={submitting || analyzing || !form.title.trim() || !storyText.trim()}
+              >
+                <IconPencil className={submitting ? "loading-spinner" : ""} size={15} />
+                {submitting ? t("episode.importing") : t("episode.createManually")}
+              </button>
+              <button
+                className="btn-p"
+                onClick={() => analyzeStory(false)}
+                disabled={analyzing || submitting || !form.title.trim() || !storyText.trim()}
+              >
+                <IconSparkles className={analyzing ? "loading-spinner" : ""} size={15} />
+                {analyzing ? t("episode.analyzingPreview") : t("episode.analyzePreview")}
+              </button>
+            </>
           ) : (
             <button
               className="btn-p"
-              onClick={submitEpisode}
-              disabled={submitting || !form.title.trim() || !storyText.trim() || (form.useAI && !analysisIsValid)}
+              onClick={() => submitEpisode(true)}
+              disabled={submitting || !analysisIsValid}
             >
               <IconCheck className={submitting ? "loading-spinner" : ""} size={15} />
               {submitting ? t("episode.importing") : t("episode.confirmCreate")}
@@ -264,43 +259,30 @@ export function NewEpisodeDialog({ filmId, onClose, onCreated }: Props) {
                   placeholder={t("episode.durationPlaceholder")}
                 />
               </div>
-              {!form.useAI && (
-                <div>
-                  <label className="form-label" htmlFor="episode-scene-count">{t("episode.splitScenesLabel")}</label>
-                  <input
-                    id="episode-scene-count"
-                    type="number"
-                    min={1}
-                    max={500}
-                    value={form.sceneCountHint}
-                    onChange={(event) => setForm((current) => ({ ...current, sceneCountHint: event.target.value }))}
-                    placeholder={t("episode.sceneCountPlaceholder")}
-                  />
-                </div>
-              )}
-            </div>
-
-            <label className={`episode-ai-toggle ${form.useAI ? "is-active" : ""}`}>
-              <input
-                type="checkbox"
-                checked={form.useAI}
-                onChange={(event) => setForm((current) => ({ ...current, useAI: event.target.checked }))}
-              />
-              <IconSparkles size={17} />
-              <span>{t("episode.aiPreviewOption")}</span>
-            </label>
-            {form.useAI && (
-              <div className="episode-provider-field">
-                <label className="form-label" htmlFor="episode-text-provider">{t("generation.provider")}</label>
-                <TextProviderSelect
-                  id="episode-text-provider"
-                  value={textProvider}
-                  onChange={setTextProvider}
-                  disabled={busy}
-                  ariaLabel={t("generation.provider")}
+              <div>
+                <label className="form-label" htmlFor="episode-scene-count">{t("episode.splitScenesLabel")}</label>
+                <input
+                  id="episode-scene-count"
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={form.sceneCountHint}
+                  onChange={(event) => setForm((current) => ({ ...current, sceneCountHint: event.target.value }))}
+                  placeholder={t("episode.sceneCountPlaceholder")}
                 />
               </div>
-            )}
+            </div>
+
+            <div className="episode-provider-field">
+              <label className="form-label" htmlFor="episode-text-provider">{t("generation.provider")}</label>
+              <TextProviderSelect
+                id="episode-text-provider"
+                value={textProvider}
+                onChange={setTextProvider}
+                disabled={busy}
+                ariaLabel={t("generation.provider")}
+              />
+            </div>
           </div>
         ) : (
           <div className="episode-preview-body">

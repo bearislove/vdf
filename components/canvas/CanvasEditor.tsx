@@ -5,6 +5,7 @@ import ReactFlow, {
   Background,
   Controls,
   BackgroundVariant,
+  ConnectionMode,
   Panel,
   addEdge,
   useNodesState,
@@ -15,7 +16,6 @@ import ReactFlow, {
   type OnSelectionChangeParams,
   type ReactFlowInstance,
   MarkerType,
-  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { SceneNode } from "./SceneNode";
@@ -25,7 +25,7 @@ import { apiPut, apiPost } from "@/lib/utils/api";
 import type { Scene } from "@/types/scene";
 import type { StoryObject } from "@/types/object";
 import type { VideoVariant } from "@/types/video";
-import { getSceneCanvasPosition, SCENES_PER_ROW } from "@/lib/canvas/scene-layout";
+import { getSceneCanvasPosition } from "@/lib/canvas/scene-layout";
 import { useAppStore } from "@/store/useAppStore";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -47,7 +47,6 @@ const defaultEdgeOptions = {
 interface CanvasEditorProps {
   episodeId: string;
   scenes: Scene[];
-  objects: StoryObject[];
   onScenesChange: () => void;
 }
 
@@ -60,8 +59,6 @@ type SceneWithRelations = Scene & {
 function buildNodes(
   scenes: Scene[],
   selectedSceneId: string | null,
-  onRemoveLink: (sceneId: string, linkId: string) => void,
-  onDropObject: (sceneId: string, objectId: string) => void,
   onDeleteScene: (sceneId: string) => void,
 ): Node[] {
   const nodes: Node[] = [];
@@ -72,15 +69,6 @@ function buildNodes(
     const isUnpositioned = scene.order > 0 && scene.canvasX === 0 && scene.canvasY === 0;
     const x = isUnpositioned ? defaultPosition.x : scene.canvasX;
     const y = isUnpositioned ? defaultPosition.y : scene.canvasY;
-    const row = Math.floor(scene.order / SCENES_PER_ROW);
-    const offsetInRow = scene.order % SCENES_PER_ROW;
-    const flowsLeftToRight = row % 2 === 0;
-    const targetPosition = offsetInRow === 0 && scene.order > 0
-      ? Position.Top
-      : flowsLeftToRight ? Position.Left : Position.Right;
-    const sourcePosition = offsetInRow === SCENES_PER_ROW - 1
-      ? Position.Bottom
-      : flowsLeftToRight ? Position.Right : Position.Left;
 
     // Scene node
     nodes.push({
@@ -94,11 +82,7 @@ function buildNodes(
           videoVariants: s.videoVariants ?? [],
           selectedVideo: s.selectedVideo ?? null,
         },
-        onRemoveLink: (linkId: string) => onRemoveLink(scene.id, linkId),
-        onDropObject: (objectId: string) => onDropObject(scene.id, objectId),
         onDelete: () => onDeleteScene(scene.id),
-        targetPosition,
-        sourcePosition,
       },
       selected: scene.id === selectedSceneId,
     });
@@ -152,20 +136,6 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
   useEffect(() => { cbRef.current = { scenes, onScenesChange }; });
 
   // ── Stable callbacks (never change reference) ─────────────────────────────
-  const handleRemoveLink = useCallback(async (sceneId: string, linkId: string) => {
-    await fetch(`/api/scenes/${sceneId}/links/${linkId}`, { method: "DELETE" });
-    cbRef.current.onScenesChange();
-  }, []);
-
-  const handleDropObject = useCallback(async (sceneId: string, objectId: string) => {
-    try {
-      await apiPost(`/api/scenes/${sceneId}/links`, { objectId, role: "present" });
-      cbRef.current.onScenesChange();
-    } catch (error) {
-      addToast("error", error instanceof Error ? error.message : String(error));
-    }
-  }, [addToast]);
-
   const execDeleteScene = useCallback(async (sceneId: string) => {
     const { scenes: sc, onScenesChange: refresh } = cbRef.current;
     const refs = sc.filter((s) => (s.transitionsTo ?? []).includes(sceneId));
@@ -259,7 +229,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
 
   // ── Nodes / Edges ─────────────────────────────────────────────────────────
   const initialNodes = useMemo(
-    () => buildNodes(scenes, selectedSceneId, handleRemoveLink, handleDropObject, (id) => {
+    () => buildNodes(scenes, selectedSceneId, (id) => {
       const scene = scenes.find((s) => s.id === id);
       setDeleteTarget({ kind: "scene", id, label: scene?.title || `Cảnh ${scene?.order ?? 0}` });
     }),
@@ -310,7 +280,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
 
   // Rebuild nodes only when scene data changes — preserve React Flow positions
   useEffect(() => {
-    setNodes(buildNodes(scenes, selectedSceneId, handleRemoveLink, handleDropObject, (id) => {
+    setNodes(buildNodes(scenes, selectedSceneId, (id) => {
       const scene = cbRef.current.scenes.find((s) => s.id === id);
       setDeleteTarget({ kind: "scene", id, label: scene?.title || `Cảnh ${scene?.order ?? 0}` });
     }));
@@ -446,6 +416,7 @@ export function CanvasEditor({ episodeId, scenes, onScenesChange }: CanvasEditor
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
+        connectionMode={ConnectionMode.Loose}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.3}

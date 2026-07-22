@@ -24,8 +24,6 @@ interface SceneWithLinks extends Omit<Scene, "objectLinks"> {
 
 interface Props {
   scene: SceneWithLinks;
-  previousScene?: SceneWithLinks;
-  objects?: StoryObject[];
   onUpdate: () => void;
 }
 
@@ -50,7 +48,7 @@ function getSavedParams(scene: SceneWithLinks): SimpleParams {
   };
 }
 
-export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
+export function SceneDetailPanel({ scene, onUpdate }: Props) {
   const { t } = useTranslation();
   const { addToast } = useAppStore();
   const { selectScene } = useCanvasStore();
@@ -223,13 +221,23 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
     }
   };
 
+  const handleTitleSave = async (nextTitle: string) => {
+    try {
+      await apiPut(`/api/scenes/${scene.id}`, { title: nextTitle });
+      onUpdate();
+    } catch (error) {
+      addToast("error", error instanceof Error ? error.message : String(error));
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <DetailPanelHeader
         title={scene.title || t("canvas.sceneNumber", { n: String(scene.order + 1) })}
-        meta={`${scene.shotType} · ${scene.mood}`}
+        titlePlaceholder={t("canvas.sceneNumber", { n: String(scene.order + 1) })}
         closeLabel={t("common.close")}
         onClose={() => selectScene(null)}
+        onTitleSave={handleTitleSave}
       />
 
       {/* Body */}
@@ -295,7 +303,6 @@ export function SceneDetailPanel({ scene, previousScene, onUpdate }: Props) {
 
         <InitialImageManager
           scene={scene as Parameters<typeof InitialImageManager>[0]["scene"]}
-          previousScene={previousScene as Parameters<typeof InitialImageManager>[0]["previousScene"]}
           aspectRatio={simpleParams.aspectRatio}
           disabled={isVideoGenerating}
           onSceneUpdate={onUpdate}

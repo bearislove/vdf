@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAgnesCredentialCount } from "@/lib/providers/agnes-credentials";
 import { resolveVideoProviderName } from "@/lib/providers/registry";
-import { runWithConcurrency } from "@/lib/utils/run-with-concurrency";
-import { queueVideoGeneration } from "@/lib/video/queue-video-generation";
-import { isVideoActive } from "@/lib/video/video-status";
+import {
+  findScenesMissingVideo,
+  queueSceneGenerations,
+  startSceneGenerationBatch,
+} from "@/lib/video/batch-video-generation";
 
 export const dynamic = "force-dynamic";
 
@@ -35,30 +37,15 @@ export async function POST(
     return NextResponse.json({ error: "Episode has no scenes" }, { status: 404 });
   }
 
-  // A scene is missing only when it has neither a completed video nor an
-  // already queued/running generation. FAILED variants are safe to replace.
-  const missingScenes = scenes.filter((scene) => {
-    const hasDone = scene.videoVariants.some((variant) => variant.status === "DONE");
-    const hasActive = scene.videoVariants.some((variant) => isVideoActive(variant.status));
-    return !hasDone && !hasActive;
-  });
+  const missingScenes = findScenesMissingVideo(scenes);
 
   if (missingScenes.length === 0) {
     return NextResponse.json({ queuedCount: 0, variantIds: [], concurrency: 0 });
   }
 
-  const queued = [];
+  let queued;
   try {
-    for (const scene of missingScenes) {
-      const savedParams = scene.videoParams
-        && typeof scene.videoParams === "object"
-        && !Array.isArray(scene.videoParams)
-          ? scene.videoParams as Record<string, unknown>
-          : {};
-      queued.push(
-        await queueVideoGeneration({ scene, providerName, requestedParams: savedParams })
-      );
-    }
+    queued = await queueSceneGenerations(missingScenes, providerName);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -69,14 +56,11 @@ export async function POST(
   // One Agnes token owns one concurrent worker. ComfyUI remains serial because
   // it is normally backed by a single local GPU queue.
   const concurrency = providerName === "agnes" ? agnesCredentialCount : 1;
-  void runWithConcurrency(
-    queued.map(({ run }) => run),
-    concurrency
-  ).catch(() => undefined); // Each runner persists its own failure detail.
+  startSceneGenerationBatch(queued, concurrency);
 
   return NextResponse.json({
     queuedCount: queued.length,
-    variantIds: queued.map((item) => item.variantId),
+    variantIds: queued.map(({ generation }) => generation.variantId),
     concurrency,
     provider: providerName,
   }, { status: 202 });

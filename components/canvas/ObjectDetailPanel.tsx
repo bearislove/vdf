@@ -193,7 +193,6 @@ export function ObjectDetailPanel({ object, onUpdate }: Props) {
     <div className="object-detail-panel">
       <DetailPanelHeader
         title={object.name}
-        meta={`${objectType.label} · ${images.length} ${t("object.images")}`}
         closeLabel={t("common.close")}
         onClose={() => selectObject(null)}
         visual={

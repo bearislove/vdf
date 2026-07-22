@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconCheck, IconEye, IconFileImport, IconLoader2, IconPhotoPlus, IconPlayerStop, IconTrash } from "@tabler/icons-react";
 import {
   InitialImageReferencePicker,
-  type InitialImageSource,
   type ObjectReferenceOption,
   type UploadedReferenceOption,
 } from "./InitialImageReferencePicker";
@@ -18,7 +17,6 @@ import {
   deleteSceneReferenceImage,
   importSceneReferenceImage,
   listSceneReferenceImages,
-  pickLastFrameVariant,
   uploadSceneReferenceImage,
   type SceneReferenceImage,
 } from "@/lib/utils/scene-reference-images";
@@ -29,7 +27,6 @@ import type { GenerationProviderName } from "@/lib/providers/types";
 
 interface InitialImageDialogProps {
   scene: SceneWithMedia;
-  previousScene?: SceneWithMedia;
   aspectRatio: string;
   onClose: () => void;
   onImported: (path: string) => void;
@@ -38,7 +35,6 @@ interface InitialImageDialogProps {
 
 export function InitialImageDialog({
   scene,
-  previousScene,
   aspectRatio,
   onClose,
   onImported,
@@ -58,9 +54,6 @@ export function InitialImageDialog({
       }));
     })
   ), [scene.objectLinks]);
-  const previousVariant = pickLastFrameVariant(previousScene?.selectedVideo, previousScene?.videoVariants);
-  const previousFramePath = previousVariant?.lastFramePath ?? null;
-  const [source, setSource] = useState<InitialImageSource>("objects");
   const [selectedReferenceIds, setSelectedReferenceIds] = useState(() => {
     const mainImages = objectOptions.filter((item) => item.isMain).map((item) => item.id);
     return (mainImages.length > 0 ? mainImages : objectOptions.map((item) => item.id)).slice(0, 4);
@@ -92,9 +85,7 @@ export function InitialImageDialog({
 
   const operationBusy = generating || importing || uploading || !!removingReferenceId || !!removingGeneratedPath;
   const busy = operationBusy || savingPrompt;
-  const canSubmit = source === "objects"
-    ? selectedReferenceIds.length > 0
-    : !!previousFramePath;
+  const canSubmit = selectedReferenceIds.length > 0;
   const normalizedPrompt = typeof prompt === "string" ? prompt.trim() : "";
   const canGenerate = canSubmit && normalizedPrompt.length > 0;
 
@@ -185,17 +176,12 @@ export function InitialImageDialog({
         headers: { "Content-Type": "application/json" },
         signal: abortController.signal,
         body: JSON.stringify({
-          source,
-          referenceImages: source === "objects"
-            ? visibleObjectOptions
-                .filter((item) => selectedReferenceIds.includes(item.id))
-                .map((item) => ({ objectId: item.objectId, path: item.path }))
-            : undefined,
-          uploadedReferencePaths: source === "objects"
-            ? uploadedOptions
-                .filter((item) => selectedReferenceIds.includes(item.id))
-                .map((item) => item.path)
-            : undefined,
+          referenceImages: visibleObjectOptions
+            .filter((item) => selectedReferenceIds.includes(item.id))
+            .map((item) => ({ objectId: item.objectId, path: item.path })),
+          uploadedReferencePaths: uploadedOptions
+            .filter((item) => selectedReferenceIds.includes(item.id))
+            .map((item) => item.path),
           prompt: normalizedPrompt,
           provider,
           width: dimensions.width,
@@ -417,16 +403,12 @@ export function InitialImageDialog({
       }
     >
           <InitialImageReferencePicker
-            source={source}
             objectOptions={visibleObjectOptions}
             uploadedOptions={uploadedOptions}
             selectedIds={selectedReferenceIds}
-            previousFramePath={previousFramePath}
-            previousSceneLabel={previousScene?.title || t("canvas.sceneNumber", { n: String((previousScene?.order ?? 0) + 1) })}
             disabled={busy}
             uploading={uploading}
             removingId={removingReferenceId}
-            onSourceChange={setSource}
             onToggle={toggleReference}
             onUpload={handleUpload}
             onRemoveObject={handleRemoveObjectReference}
@@ -446,11 +428,9 @@ export function InitialImageDialog({
             required
             style={{ resize: "vertical" }}
           />
-          {source === "objects" && (
-            <p style={{ marginTop: 5, color: "var(--text3)", fontSize: 9, lineHeight: 1.45 }}>
-              {t("canvas.imageEditPromptHint")}
-            </p>
-          )}
+          <p style={{ marginTop: 5, color: "var(--text3)", fontSize: 9, lineHeight: 1.45 }}>
+            {t("canvas.imageEditPromptHint")}
+          </p>
 
           {(progress || error) && (
             <div

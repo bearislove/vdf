@@ -7,30 +7,6 @@ export interface SceneReferenceImage {
   selected: boolean;
 }
 
-interface LastFrameVariantLike {
-  status: string;
-  lastFramePath?: string | null;
-  completedAt?: string | Date | null;
-}
-
-/**
- * Quy tắc duy nhất chọn variant cung cấp last frame của scene trước:
- * ưu tiên selectedVideo nếu có frame, ngược lại variant DONE mới nhất có frame.
- * Dùng chung cho cả client (preview) lẫn server (tạo ảnh/video) để không lệch nhau.
- */
-export function pickLastFrameVariant<T extends LastFrameVariantLike>(
-  selectedVideo: T | null | undefined,
-  videoVariants: readonly T[] | null | undefined
-): T | null {
-  if (selectedVideo?.lastFramePath) return selectedVideo;
-  const candidates = (videoVariants ?? []).filter(
-    (variant) => variant.status === "DONE" && variant.lastFramePath
-  );
-  return [...candidates].sort(
-    (a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime()
-  )[0] ?? null;
-}
-
 interface SceneReferenceImagesResponse {
   images: SceneReferenceImage[];
 }

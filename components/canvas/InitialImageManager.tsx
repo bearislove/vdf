@@ -13,7 +13,6 @@ import type { SceneWithMedia } from "@/types/canvas";
 
 interface InitialImageManagerProps {
   scene: SceneWithMedia;
-  previousScene?: SceneWithMedia;
   aspectRatio: string;
   disabled?: boolean;
   onSceneUpdate: () => void;
@@ -21,7 +20,6 @@ interface InitialImageManagerProps {
 
 export function InitialImageManager({
   scene,
-  previousScene,
   aspectRatio,
   disabled,
   onSceneUpdate,
@@ -180,7 +178,6 @@ export function InitialImageManager({
       {showDialog && (
         <InitialImageDialog
           scene={scene as Parameters<typeof InitialImageDialog>[0]["scene"]}
-          previousScene={previousScene as Parameters<typeof InitialImageDialog>[0]["previousScene"]}
           aspectRatio={aspectRatio}
           onClose={() => setShowDialog(false)}
           onImported={() => {

@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { buildPrompt, resolveObjectReferenceImagePaths } from "@/lib/comfyui/prompt";
 import { imageGenerationSSEResponse } from "@/lib/providers/image/sse";
 import { getImageProvider, resolveImageProviderForReferences } from "@/lib/providers/registry";
-import { pickLastFrameVariant } from "@/lib/utils/scene-reference-images";
 import {
   ensureDir,
   resolveStoragePath,
@@ -17,10 +16,8 @@ import {
 export const dynamic = "force-dynamic";
 
 const MAX_REFERENCE_IMAGES = 4;
-type ReferenceSource = "objects" | "previous_scene";
 
 interface GenerateImageRequest {
-  source?: unknown;
   referenceImages?: unknown;
   objectIds?: unknown;
   uploadedReferencePaths?: unknown;
@@ -51,22 +48,6 @@ function existingStoragePath(relativePath: unknown): string[] {
   } catch {
     return [];
   }
-}
-
-async function resolvePreviousSceneReference(scene: GenerationScene): Promise<string[]> {
-  const previousScene = await prisma.scene.findFirst({
-    where: { episodeId: scene.episodeId, order: { lt: scene.order } },
-    orderBy: { order: "desc" },
-    include: {
-      selectedVideo: true,
-      videoVariants: {
-        where: { status: "DONE", lastFramePath: { not: null } },
-        orderBy: { completedAt: "desc" },
-      },
-    },
-  });
-  const variant = pickLastFrameVariant(previousScene?.selectedVideo, previousScene?.videoVariants);
-  return existingStoragePath(variant?.lastFramePath);
 }
 
 function resolveRequestedObjectReferences(
@@ -106,10 +87,8 @@ function resolveUploadedReferences(scene: GenerationScene, paths: unknown): stri
 
 async function resolveReferenceImages(
   scene: GenerationScene,
-  source: ReferenceSource,
   body: GenerateImageRequest
 ): Promise<string[]> {
-  if (source === "previous_scene") return resolvePreviousSceneReference(scene);
   const paths = [
     ...resolveRequestedObjectReferences(scene, body),
     ...resolveUploadedReferences(scene, body.uploadedReferencePaths),
@@ -117,13 +96,8 @@ async function resolveReferenceImages(
   return Array.from(new Set(paths)).slice(0, MAX_REFERENCE_IMAGES);
 }
 
-function buildGenerationPrompt(
-  source: ReferenceSource,
-  basePrompt: string
-): string {
-  return source === "objects"
-    ? `Preserve the exact identity, face, hairstyle, clothing, colors, and defining visual features of every subject in the reference images. Do not redesign or replace them. Compose them naturally in this scene: ${basePrompt}`
-    : `Use the provided previous-scene frame as the visual anchor. Preserve character identity, clothing, environment, color palette, and continuity while composing this scene: ${basePrompt}`;
+function buildGenerationPrompt(basePrompt: string): string {
+  return `Preserve the exact identity, face, hairstyle, clothing, colors, and defining visual features of every subject in the reference images. Do not redesign or replace them. Compose them naturally in this scene: ${basePrompt}`;
 }
 
 function positiveNumber(value: unknown, fallback: number): number {
@@ -146,13 +120,12 @@ export async function POST(
   if (!scene) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({})) as GenerateImageRequest;
-  const source: ReferenceSource = body.source === "previous_scene" ? "previous_scene" : "objects";
-  const referenceImagePaths = await resolveReferenceImages(scene, source, body);
+  const referenceImagePaths = await resolveReferenceImages(scene, body);
   if (referenceImagePaths.length === 0) {
-    const error = source === "previous_scene"
-      ? "Scene trước chưa có frame cuối để làm ảnh tham chiếu"
-      : "Các ảnh tham chiếu được chọn không tồn tại hoặc không thuộc scene này";
-    return NextResponse.json({ error }, { status: 400 });
+    return NextResponse.json(
+      { error: "Các ảnh tham chiếu được chọn không tồn tại hoặc không thuộc scene này" },
+      { status: 400 }
+    );
   }
 
   const requestedPrompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
@@ -164,7 +137,7 @@ export async function POST(
   return imageGenerationSSEResponse(
     provider,
     {
-      prompt: buildGenerationPrompt(source, basePrompt),
+      prompt: buildGenerationPrompt(basePrompt),
       width: positiveNumber(body.width, 512),
       height: positiveNumber(body.height, 512),
       model: typeof body.model === "string" ? body.model : undefined,

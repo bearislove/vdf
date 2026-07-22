@@ -10,11 +10,25 @@ import {
   type SceneForVideoGeneration,
 } from "@/lib/video/run-video-generation";
 import type { GenerationProviderName } from "@/lib/providers/types";
+import { toErrorMessage } from "@/lib/utils/errors";
 import type { Prisma } from "@prisma/client";
 
 export interface QueuedVideoGeneration {
   variantId: string;
-  run: () => Promise<void>;
+  hasReferenceImage: boolean;
+  fail: (error: unknown) => Promise<void>;
+  run: (sceneOverride?: SceneForVideoGeneration) => Promise<void>;
+}
+
+async function markVideoGenerationFailed(variantId: string, error: unknown): Promise<void> {
+  await prisma.videoVariant.update({
+    where: { id: variantId },
+    data: {
+      status: "FAILED",
+      errorDetail: toErrorMessage(error),
+      completedAt: new Date(),
+    },
+  }).catch(() => undefined);
 }
 
 /**
@@ -52,10 +66,31 @@ export async function queueVideoGeneration(params: {
 
   return {
     variantId: variant.id,
-    run: () => runVideoGeneration({
-      variantId: variant.id,
-      providerName: params.providerName,
-      baseCtx,
-    }),
+    hasReferenceImage: !!baseCtx.inputImagePath,
+    fail: (error) => markVideoGenerationFailed(variant.id, error),
+    run: async (sceneOverride = params.scene) => {
+      try {
+        const nextContext = buildVideoContext(sceneOverride, videoParams);
+        const nextValidationError = provider.validate(nextContext.baseCtx);
+        if (nextValidationError) throw new Error(nextValidationError);
+
+        await prisma.videoVariant.update({
+          where: { id: variant.id },
+          data: {
+            paramsSnapshot: nextContext.baseCtx.videoParams as Prisma.InputJsonValue,
+            compositeImagePath: nextContext.referenceImagePath,
+            referenceImagePaths: nextContext.referenceImagePaths,
+            strategy: nextContext.referenceImagePath ? "i2v_single" : "t2v",
+          },
+        });
+        await runVideoGeneration({
+          variantId: variant.id,
+          providerName: params.providerName,
+          baseCtx: nextContext.baseCtx,
+        });
+      } catch (error) {
+        await markVideoGenerationFailed(variant.id, error);
+      }
+    },
   };
 }

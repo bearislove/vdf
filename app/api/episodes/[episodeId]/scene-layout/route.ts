@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSceneCanvasPosition } from "@/lib/canvas/scene-layout";
+import { getSceneCanvasPosition, orderScenesByConnections } from "@/lib/canvas/scene-layout";
 
 export async function PUT(
   _req: NextRequest,
@@ -9,12 +9,19 @@ export async function PUT(
   const scenes = await prisma.scene.findMany({
     where: { episodeId: params.episodeId },
     orderBy: { order: "asc" },
-    select: { id: true, order: true },
+    select: { id: true, order: true, transitionsTo: true },
   });
 
-  const arrangedScenes = scenes.map((scene) => ({
+  const sequence = orderScenesByConnections(scenes.map((scene) => ({
     id: scene.id,
-    ...getSceneCanvasPosition(scene.order),
+    order: scene.order,
+    transitionsTo: Array.isArray(scene.transitionsTo)
+      ? scene.transitionsTo.filter((id): id is string => typeof id === "string")
+      : [],
+  })));
+  const arrangedScenes = sequence.map((id, index) => ({
+    id,
+    ...getSceneCanvasPosition(index),
   }));
 
   await prisma.$transaction(

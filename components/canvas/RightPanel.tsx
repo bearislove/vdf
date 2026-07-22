@@ -18,11 +18,6 @@ export function RightPanel({ scenes, objects, onSceneUpdate, onObjectUpdate }: R
   const { selectedSceneId, selectedObjectId } = useCanvasStore();
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId);
-  const previousScene = selectedScene
-    ? [...scenes]
-        .filter((scene) => scene.order < selectedScene.order)
-        .sort((a, b) => b.order - a.order)[0]
-    : undefined;
   const selectedObject = objects.find((o) => o.id === selectedObjectId);
 
   return (
@@ -40,7 +35,6 @@ export function RightPanel({ scenes, objects, onSceneUpdate, onObjectUpdate }: R
       {selectedScene ? (
         <SceneDetailPanel
           scene={selectedScene as Parameters<typeof SceneDetailPanel>[0]["scene"]}
-          previousScene={previousScene as Parameters<typeof SceneDetailPanel>[0]["previousScene"]}
           onUpdate={onSceneUpdate}
         />
       ) : selectedObject ? (

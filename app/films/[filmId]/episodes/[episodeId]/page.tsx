@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Topbar } from "@/components/layout/Topbar";
-import { ObjectPanel } from "@/components/canvas/ObjectPanel";
 import { CanvasEditor } from "@/components/canvas/CanvasEditor";
 import { RightPanel } from "@/components/canvas/RightPanel";
 import { EpisodeVideoActions } from "@/components/episodes/EpisodeVideoActions";
@@ -25,7 +24,6 @@ export default function EpisodePage({ params }: Props) {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [objects, setObjects] = useState<StoryObject[]>([]);
   const [loading, setLoading] = useState(true);
-  const leftPanel = useResizePanel(386, 186, 520, "left");
   const rightPanel = useResizePanel(426, 126, 520, "right");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -101,22 +99,9 @@ export default function EpisodePage({ params }: Props) {
       {/* Canvas layout */}
       {!loading && (
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {/* Left panel + drag handle */}
-          <div style={{ display: "flex", flexShrink: 0 }}>
-            <div style={{ width: leftPanel.width, overflow: "hidden", display: "flex" }}>
-              <ObjectPanel
-                objects={objects}
-                filmId={params.filmId}
-                onObjectsChange={load}
-              />
-            </div>
-            <ResizeHandle onMouseDown={leftPanel.onMouseDown} />
-          </div>
-
           <CanvasEditor
             episodeId={params.episodeId}
             scenes={scenes}
-            objects={objects}
             onScenesChange={load}
           />
 

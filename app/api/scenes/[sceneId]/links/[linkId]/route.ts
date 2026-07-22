@@ -5,6 +5,11 @@ export async function DELETE(
   _: NextRequest,
   { params }: { params: { sceneId: string; linkId: string } }
 ) {
-  await prisma.sceneObjectLink.delete({ where: { id: params.linkId } });
+  const result = await prisma.sceneObjectLink.deleteMany({
+    where: { id: params.linkId, sceneId: params.sceneId },
+  });
+  if (result.count === 0) {
+    return NextResponse.json({ error: "Scene object link not found" }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 }

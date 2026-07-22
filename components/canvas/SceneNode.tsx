@@ -21,12 +21,10 @@ export interface SceneNodeData {
     videoVariants?: VideoVariant[];
     selectedVideo?: VideoVariant | null;
   };
-  onRemoveLink?: (linkId: string) => void;
-  onDropObject?: (objectId: string) => void;
   onDelete?: () => void;
-  targetPosition?: Position;
-  sourcePosition?: Position;
 }
+
+const HANDLE_POSITIONS = [Position.Top, Position.Right, Position.Bottom, Position.Left];
 
 const CHAR_COLORS = ["#FF9C2A", "#5B9CF6", "#2ECC71", "#C084FC", "#F87171"];
 
@@ -54,18 +52,9 @@ function StatusDot({ status }: { status: string }) {
 }
 
 export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<SceneNodeData>) {
-  const {
-    scene,
-    onRemoveLink,
-    onDropObject,
-    onDelete,
-    targetPosition = Position.Left,
-    sourcePosition = Position.Right,
-  } = data;
+  const { scene, onDelete } = data;
   const { t } = useTranslation();
-  const { selectScene, selectObject, draggingObjectId } = useCanvasStore();
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [hoveredLinkId, setHoveredLinkId] = useState<string | null>(null);
+  const { selectScene, selectObject } = useCanvasStore();
 
   const latestVariant = scene.videoVariants?.[scene.videoVariants.length - 1];
   const selectedVariant = scene.selectedVideo;
@@ -91,29 +80,14 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
       ? Math.round((displayVariant.progressStep / displayVariant.progressTotal) * 100)
       : 0;
 
-  const showDropTarget = isDragOver && !!draggingObjectId;
-
   return (
     <div
       onClick={() => selectScene(scene.id)}
-      onDragEnter={(e) => { if (draggingObjectId) { e.preventDefault(); setIsDragOver(true); } }}
-      onDragLeave={(e) => {
-        // Only clear if leaving the node entirely (not entering a child)
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false);
-      }}
-      onDragOver={(e) => { if (draggingObjectId) e.preventDefault(); }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragOver(false);
-        if (draggingObjectId && onDropObject) onDropObject(draggingObjectId);
-      }}
       style={{
         width: 172,
         background: "var(--bg1)",
         border: selected
           ? "1.5px solid var(--accent)"
-          : showDropTarget
-          ? "1.5px dashed var(--accent)"
           : "0.5px solid var(--border)",
         borderRadius: 9,
         overflow: "hidden",
@@ -123,9 +97,18 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
         transition: "border-color 150ms",
       }}
     >
-      {/* Handles */}
-      <Handle type="target" position={targetPosition} style={{ background: "var(--border2)" }} />
-      <Handle type="source" position={sourcePosition} style={{ background: "var(--border2)" }} />
+      {/* Connection handles on all 4 sides — the rendered edge always attaches at
+          whichever side is geometrically closest to the other node (see DeletableEdge),
+          these just give a grab point on every side for starting a drag. */}
+      {HANDLE_POSITIONS.map((position) => (
+        <Handle
+          key={position}
+          type="source"
+          position={position}
+          id={position}
+          style={{ background: "var(--border2)" }}
+        />
+      ))}
 
       {/* Head */}
       <div
@@ -151,29 +134,14 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
       <div
         style={{
           height: 68,
-          background: showDropTarget ? "rgba(42,30,10,0.85)" : "var(--bg2)",
+          background: "var(--bg2)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           position: "relative",
           overflow: "hidden",
-          transition: "background 150ms",
         }}
       >
-        {/* Drop target overlay */}
-        {showDropTarget && (
-          <div
-            style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 10, color: "var(--accent)", fontWeight: 500,
-              pointerEvents: "none",
-            }}
-          >
-            {t("canvas.addToScene")}
-          </div>
-        )}
-
         {isDone ? (
           coverImg ? (
             <img
@@ -243,7 +211,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
         >
           {scene.title || t("canvas.sceneNumber", { n: String(scene.order + 1) })}
         </div>
-        {/* Object avatar row — click to select, hover to show ✕ */}
+        {/* Object avatar row — read-only, click to select */}
         {characters.length > 0 && (
           <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
             {characters.map((link, i) => {
@@ -252,7 +220,6 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
               const refImages = obj.refImages as Array<{ path: string; isMain: boolean }> | undefined;
               const mainImg = refImages?.find((r) => r.isMain) ?? refImages?.[0];
               const color = CHAR_COLORS[i % CHAR_COLORS.length];
-              const isHovered = hoveredLinkId === link.id;
               return (
                 <div
                   key={link.id ?? obj.id}
@@ -261,16 +228,14 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
                     e.stopPropagation();
                     selectObject(obj.id);
                   }}
-                  onMouseEnter={() => setHoveredLinkId(link.id)}
-                  onMouseLeave={() => setHoveredLinkId(null)}
                   style={{
                     width: 26,
                     height: 26,
                     borderRadius: 5,
                     background: color + "33",
-                    border: `1.5px solid ${isHovered ? color : color + "44"}`,
+                    border: `1.5px solid ${color}44`,
                     flexShrink: 0,
-                    overflow: "visible",
+                    overflow: "hidden",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -278,52 +243,16 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
                     fontWeight: 600,
                     color,
                     cursor: "pointer",
-                    position: "relative",
-                    transition: "border-color 100ms",
                   }}
                 >
-                  {/* Avatar content */}
-                  <div style={{ width: "100%", height: "100%", borderRadius: 4, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {mainImg ? (
-                      <img
-                        src={`/api/files/${mainImg.path}`}
-                        alt={obj.name}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      />
-                    ) : (
-                      <span>{obj.name[0].toUpperCase()}</span>
-                    )}
-                  </div>
-
-                  {/* ✕ badge — top right, visible on hover */}
-                  {isHovered && onRemoveLink && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveLink(link.id);
-                      }}
-                      style={{
-                        position: "absolute",
-                        top: -5,
-                        right: -5,
-                        width: 13,
-                        height: 13,
-                        borderRadius: "50%",
-                        background: "var(--red)",
-                        border: "1.5px solid var(--bg1)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: "#fff",
-                        cursor: "pointer",
-                        zIndex: 10,
-                        lineHeight: 1,
-                      }}
-                    >
-                      ✕
-                    </div>
+                  {mainImg ? (
+                    <img
+                      src={`/api/files/${mainImg.path}`}
+                      alt={obj.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  ) : (
+                    <span>{obj.name[0].toUpperCase()}</span>
                   )}
                 </div>
               );
@@ -333,7 +262,7 @@ export const SceneNode = memo(function SceneNode({ data, selected }: NodeProps<S
       </div>
 
       {/* Delete scene button — top right corner on hover */}
-      {isDragOver === false && onDelete && (
+      {onDelete && (
         <DeleteSceneButton onDelete={onDelete} />
       )}
 
