@@ -270,10 +270,14 @@ ${scenePrompt}`,
       { role: "user", content },
     ],
     temperature: 0.2,
-    max_tokens: 900,
+    // Agnes 2.0 may spend part of this budget on multimodal reasoning before
+    // emitting the visible answer. A 900-token cap can therefore produce a
+    // successful response whose visible content is empty.
+    max_tokens: 2048,
   });
   let response: Response | undefined;
   let responseDetail = "";
+  let groundedPrompt = "";
   const maxAttempts = Math.max(3, getAgnesCredentialCount());
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const credential = getNextAgnesCredential("text");
@@ -284,15 +288,41 @@ ${scenePrompt}`,
         body: requestBody,
         signal: AbortSignal.timeout(120000),
       });
-      if (response.ok) break;
-      responseDetail = await response.text().catch(() => "");
-      if (![429, 500, 502, 503, 504].includes(response.status)) break;
+      if (response.ok) {
+        const data = await response.json().catch(() => null);
+        const message = data?.choices?.[0]?.message;
+        const content = message?.content;
+        groundedPrompt = typeof content === "string"
+          ? content.trim()
+          : Array.isArray(content)
+            ? content
+                .map((part: unknown) => {
+                  if (!part || typeof part !== "object") return "";
+                  const item = part as { text?: unknown };
+                  return typeof item.text === "string" ? item.text : "";
+                })
+                .join("")
+                .trim()
+            : "";
+        if (groundedPrompt) break;
+
+        const finishReason = data?.choices?.[0]?.finish_reason;
+        const refusal = message?.refusal;
+        responseDetail = [
+          finishReason ? `finish_reason=${String(finishReason)}` : "",
+          typeof refusal === "string" && refusal.trim() ? `refusal=${refusal.trim()}` : "",
+        ].filter(Boolean).join(", ") || "empty completion";
+      } else {
+        responseDetail = await response.text().catch(() => "");
+        if (!shouldRetryAgnesStatus(response.status)) break;
+      }
     } catch (error) {
       responseDetail = toErrorMessage(error);
       if (attempt === maxAttempts - 1) break;
     }
     await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
   }
+  if (groundedPrompt) return groundedPrompt;
   if (!response?.ok) {
     const status = response?.status ? `HTTP ${response.status}` : "network error";
     const upstreamDetail = /cannot connect to host|connection reset/i.test(responseDetail)
@@ -300,12 +330,9 @@ ${scenePrompt}`,
       : compactUploadResponse(responseDetail) || "no details";
     throw new Error(`Agnes AI reference analysis failed after ${maxAttempts} attempts (${status}): ${upstreamDetail}`);
   }
-  const data = await response.json();
-  const groundedPrompt = data?.choices?.[0]?.message?.content;
-  if (typeof groundedPrompt !== "string" || !groundedPrompt.trim()) {
-    throw new Error("Agnes AI reference analysis returned no prompt");
-  }
-  return groundedPrompt.trim();
+  throw new Error(
+    `Agnes AI reference analysis returned no prompt after ${maxAttempts} attempts (${responseDetail})`
+  );
 }
 
 export interface AgnesImageParams {
@@ -456,8 +483,22 @@ export interface AgnesVideoStatus {
   error?: string;
 }
 
+const AGNES_STATUS_CACHE_MS = 65000;
+const agnesStatusRequests = new Map<
+  string,
+  { expiresAt: number; request: Promise<AgnesVideoStatus> }
+>();
+
 export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVideoStatus> {
   const credential = getAgnesCredential(job.credentialId);
+  const cacheKey = `${credential.id}:${job.videoId ?? job.taskId}`;
+  const cached = agnesStatusRequests.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.request;
+
+  agnesStatusRequests.forEach((entry, key) => {
+    if (entry.expiresAt <= Date.now()) agnesStatusRequests.delete(key);
+  });
+
   // Prefer the documented video_id endpoint with model_name, then fall back to task_id.
   const url = job.videoId
     ? `${AGNES_BASE_URL.replace(/\/v1$/, "")}/agnesapi?${new URLSearchParams({
@@ -465,22 +506,29 @@ export async function agnesGetVideoStatus(job: AgnesVideoJob): Promise<AgnesVide
         model_name: job.model ?? AGNES_VIDEO_MODEL,
       })}`
     : `${AGNES_BASE_URL}/videos/${encodeURIComponent(job.taskId)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${credential.apiKey}` },
-    signal: AbortSignal.timeout(15000),
+  const request = (async (): Promise<AgnesVideoStatus> => {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${credential.apiKey}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      throw new Error(`Agnes AI status check failed: ${res.status} ${await res.text().catch(() => "")}`);
+    }
+    const data = await res.json();
+    // Agnes may return {code, message}; normalize it before persisting through Prisma.
+    const rawError = data.error ?? data.message;
+    return {
+      status: data.status,
+      progress: data.progress ?? 0,
+      url: data.url,
+      error: rawError == null ? undefined : toErrorMessage(rawError),
+    };
+  })();
+  agnesStatusRequests.set(cacheKey, {
+    expiresAt: Date.now() + AGNES_STATUS_CACHE_MS,
+    request,
   });
-  if (!res.ok) {
-    throw new Error(`Agnes AI status check failed: ${res.status} ${await res.text().catch(() => "")}`);
-  }
-  const data = await res.json();
-  // Agnes may return {code, message}; normalize it before persisting through Prisma.
-  const rawError = data.error ?? data.message;
-  return {
-    status: data.status,
-    progress: data.progress ?? 0,
-    url: data.url,
-    error: rawError == null ? undefined : toErrorMessage(rawError),
-  };
+  return request;
 }
 
 export async function agnesDownload(url: string): Promise<Buffer> {
@@ -494,16 +542,23 @@ export async function agnesPollVideo(
   onProgress?: (s: AgnesVideoStatus) => void,
   opts: { intervalMs?: number; timeoutMs?: number } = {}
 ): Promise<AgnesVideoStatus> {
-  // Back off from 5 seconds by 1.35x, capped at 12 seconds.
-  let interval = opts.intervalMs ?? 5000;
+  // Agnes currently limits status checks to roughly one request per minute.
+  // Treat rate-limit and temporary upstream failures as polling delays rather
+  // than failing a video that is still rendering.
+  let interval = opts.intervalMs ?? 65000;
   const timeout = opts.timeoutMs ?? 20 * 60 * 1000;
   const start = Date.now();
   while (Date.now() - start < timeout) {
-    const status = await agnesGetVideoStatus(job);
-    onProgress?.(status);
-    if (status.status === "completed" || status.status === "failed") return status;
+    try {
+      const status = await agnesGetVideoStatus(job);
+      onProgress?.(status);
+      if (status.status === "completed" || status.status === "failed") return status;
+    } catch (error) {
+      const message = toErrorMessage(error);
+      if (!/status check failed: (429|500|502|503|504)\b/i.test(message)) throw error;
+    }
     await new Promise((r) => setTimeout(r, interval));
-    interval = Math.min(interval * 1.35, 12000);
+    interval = Math.min(interval * 1.15, 90000);
   }
   return { status: "failed", progress: 0, error: "Timed out waiting for Agnes AI video generation" };
 }

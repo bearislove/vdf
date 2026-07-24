@@ -16,19 +16,24 @@ export async function POST(
   _: NextRequest,
   { params }: { params: { episodeId: string } }
 ) {
-  // Load all GENERATING/QUEUED variants for this episode
+  // Active in-process generators persist progress at least once per Agnes
+  // polling interval. Only reconcile stale variants here; otherwise the page's
+  // three-second refresh loop duplicates the provider poller and triggers
+  // Agnes's status-query rate limit.
+  const staleBefore = new Date(Date.now() - 2 * 60 * 1000);
   const pendingVariants = await prisma.videoVariant.findMany({
     where: {
       status: { in: ["GENERATING_IMAGE", "GENERATING_VIDEO", "QUEUED"] },
       scene: { episodeId: params.episodeId },
+      updatedAt: { lte: staleBefore },
     },
     include: {
       scene: { include: { episode: { include: { film: true } } } },
     },
   });
 
-  // Check sequentially to avoid hammering a local ComfyUI instance or a
-  // provider API when an episode contains many active variants.
+  // Check stale work sequentially to avoid hammering a local ComfyUI instance
+  // or a provider API when an episode contains many interrupted variants.
   for (const variant of pendingVariants) await recoverVideoVariant(variant);
 
   // Return the latest scene state after reconciliation.
