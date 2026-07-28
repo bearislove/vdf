@@ -449,15 +449,22 @@ export async function agnesSubmitVideo(params: AgnesVideoParams): Promise<AgnesV
   let res: Response | undefined;
   let responseText = "";
   let credential: AgnesCredential | undefined;
-  const maxAttempts = Math.max(1, getAgnesCredentialCount());
+  const maxAttempts = Math.max(3, getAgnesCredentialCount());
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     credential = getNextAgnesCredential("video");
-    res = await fetch(`${AGNES_BASE_URL}/videos`, {
-      method: "POST",
-      headers: authHeaders(credential),
-      body: requestBody,
-      signal: AbortSignal.timeout(30000),
-    });
+    try {
+      res = await fetch(`${AGNES_BASE_URL}/videos`, {
+        method: "POST",
+        headers: authHeaders(credential),
+        body: requestBody,
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (error) {
+      res = undefined;
+      responseText = toErrorMessage(error);
+      if (attempt < maxAttempts - 1) await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      continue;
+    }
     if (res.ok) break;
     responseText = await res.text().catch(() => "");
     if (!shouldRetryAgnesStatus(res.status)) break;
@@ -555,7 +562,9 @@ export async function agnesPollVideo(
       if (status.status === "completed" || status.status === "failed") return status;
     } catch (error) {
       const message = toErrorMessage(error);
-      if (!/status check failed: (429|500|502|503|504)\b/i.test(message)) throw error;
+      const isTransient = /status check failed: (429|500|502|503|504)\b/i.test(message)
+        || /aborted due to timeout|fetch failed|network|ECONNRESET|ETIMEDOUT|TimeoutError/i.test(message);
+      if (!isTransient) throw error;
     }
     await new Promise((r) => setTimeout(r, interval));
     interval = Math.min(interval * 1.15, 90000);
